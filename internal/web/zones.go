@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mmatfi/mrdns/internal/audit"
 	"github.com/mmatfi/mrdns/internal/config"
+	"github.com/mmatfi/mrdns/internal/deploy"
 	"github.com/mmatfi/mrdns/internal/store"
 	"github.com/mmatfi/mrdns/internal/zone"
 )
@@ -189,6 +191,7 @@ func (srv *Server) handleRawSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	srv.audit.Log(audit.Event{Action: "raw_save", Actor: clientIP(r), Zone: name})
 	http.Redirect(w, r, "/zones/"+name+"?flash=Draft+saved", http.StatusSeeOther)
 }
 
@@ -201,6 +204,7 @@ func (srv *Server) handleDiscard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "discard: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	srv.audit.Log(audit.Event{Action: "discard", Actor: clientIP(r), Zone: name})
 	http.Redirect(w, r, "/zones/"+name+"?flash=Draft+discarded", http.StatusSeeOther)
 }
 
@@ -265,10 +269,34 @@ func (srv *Server) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		if res != nil {
 			data["Result"] = res
 		}
+		srv.audit.Log(audit.Event{Action: "deploy", Actor: clientIP(r), Zone: name, Status: "error", Detail: err.Error()})
 	} else {
 		data["Result"] = res
+		srv.metrics.ObserveDeploy(string(res.Status))
+		srv.audit.Log(audit.Event{
+			Action: "deploy", Actor: clientIP(r), Zone: name,
+			Status: string(res.Status), OldSerial: res.OldSerial, NewSerial: res.NewSerial,
+			Servers: serverSummaries(res.Servers),
+		})
 	}
 	srv.render(w, "deploy_result.html", data)
+}
+
+// serverSummaries renders each per-server result as "name:state" for the audit
+// log, where state is the furthest stage reached or the failing stage.
+func serverSummaries(srs []deploy.ServerResult) []string {
+	out := make([]string, len(srs))
+	for i, sr := range srs {
+		state := "reloaded"
+		switch {
+		case sr.Err != "":
+			state = strings.SplitN(sr.Err, ":", 2)[0]
+		case !sr.Verified:
+			state = "unverified"
+		}
+		out[i] = sr.Name + ":" + state
+	}
+	return out
 }
 
 func (srv *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
@@ -307,5 +335,6 @@ func (srv *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "rollback: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	srv.audit.Log(audit.Event{Action: "rollback", Actor: clientIP(r), Zone: name, Detail: id})
 	http.Redirect(w, r, "/zones/"+name+"?flash=Restored+into+draft;+review+and+deploy", http.StatusSeeOther)
 }

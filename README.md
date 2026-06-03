@@ -11,27 +11,36 @@ over SSH to predefined nameservers, reloading `named` afterward.
 
 See [DESIGN.md](DESIGN.md) for the full design and roadmap.
 
-> Status: **P3** — the web UI is in. Sign in, browse zones, edit records
+> Status: **feature-complete (P0–P4).** Sign in, browse zones, edit records
 > (add/delete) or the raw zone file into a draft, review the draft-vs-live diff,
-> validate, and deploy to all targets with per-server results, plus
-> history/rollback. Built on P0–P2 (auth, zone core + flat-file store, SSH
-> deploy engine). Remaining: **P4** hardening/ops (audit log, metrics, install
-> polish, container e2e).
+> validate, and deploy over SSH to all targets with per-server results, plus
+> history/rollback. Hardening is in: append-only audit log, Prometheus
+> `/metrics`, and per-IP login rate limiting. See [DESIGN.md](DESIGN.md) for
+> the architecture and the (still-open) niceties.
 
 ## Build & run (local dev)
 
 ```sh
-go build ./...
-
-export MRDNS_TOKEN=$(openssl rand -hex 32)
-export MRDNS_COOKIE_KEY=$(openssl rand -hex 32)
-
-go run ./cmd/mrdns -config configs/mrdns.example.yaml
-# open http://127.0.0.1:8080/  → redirected to /login; sign in with $MRDNS_TOKEN
+make run        # builds and runs against configs/mrdns.dev.yaml (state under ./.dev)
+# open http://127.0.0.1:8080/ → sign in with the token (defaults to "dev-token")
 ```
 
-`secure_cookies: false` in the example config lets sessions work over plain
-HTTP on localhost. Set it to `true` in production and serve behind TLS.
+Override the secrets explicitly, or use other targets:
+
+```sh
+export MRDNS_TOKEN=$(openssl rand -hex 32)
+export MRDNS_COOKIE_KEY=$(openssl rand -hex 32)
+make run
+
+make check      # gofmt + vet + test
+make race       # tests under the race detector
+make secrets    # print strong MRDNS_TOKEN / MRDNS_COOKIE_KEY values
+```
+
+Metrics are exposed at `/metrics`; the audit trail is JSONL under
+`<zones_dir>/log/`. `secure_cookies: false` in the dev config lets sessions work
+over plain HTTP on localhost — set it to `true` in production and serve behind
+TLS.
 
 ## Install (/opt/mrdns)
 

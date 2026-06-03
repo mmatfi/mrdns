@@ -43,6 +43,7 @@ func isMutating(method string) bool {
 
 func (srv *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srv.metrics.HTTPRequests.Add(1)
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)

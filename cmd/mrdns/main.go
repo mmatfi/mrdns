@@ -12,8 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mmatfi/mrdns/internal/audit"
 	"github.com/mmatfi/mrdns/internal/config"
 	"github.com/mmatfi/mrdns/internal/deploy"
+	"github.com/mmatfi/mrdns/internal/metrics"
 	"github.com/mmatfi/mrdns/internal/store"
 	"github.com/mmatfi/mrdns/internal/web"
 )
@@ -44,13 +46,26 @@ func run() error {
 		logger.Warn("secure_cookies is disabled; only acceptable behind TLS or on localhost")
 	}
 
+	aud, err := audit.New(cfg.AuditLog)
+	if err != nil {
+		return err
+	}
+	defer aud.Close()
+
 	st, err := store.New(cfg.LiveDir(), cfg.DraftDir(), cfg.BackupDir(), cfg.LockDir(), cfg.BackupKeep)
 	if err != nil {
 		return err
 	}
 	pipeline := deploy.New(cfg, st, logger)
 
-	srv, err := web.New(cfg, st, pipeline, logger)
+	srv, err := web.New(web.Deps{
+		Config:   cfg,
+		Store:    st,
+		Deployer: pipeline,
+		Audit:    aud,
+		Metrics:  metrics.New(),
+		Logger:   logger,
+	})
 	if err != nil {
 		return err
 	}

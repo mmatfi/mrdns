@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"io"
+	"net"
 	"net/http"
 	"sort"
+	"time"
+
+	"github.com/mmatfi/mrdns/internal/audit"
 )
 
 func (srv *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +36,12 @@ func (srv *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if !srv.loginLimiter.allow(ip, time.Now()) {
+		srv.audit.Log(audit.Event{Action: "login_rate_limited", Actor: ip})
+		http.Error(w, "too many attempts; try again later", http.StatusTooManyRequests)
+		return
+	}
 	s, ok := srv.currentSession(r)
 	if !ok {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -46,12 +56,23 @@ func (srv *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(r.PostFormValue("token")), []byte(srv.authToken)) != 1 {
+		srv.metrics.LoginFailures.Add(1)
+		srv.audit.Log(audit.Event{Action: "login_failed", Actor: ip})
 		http.Redirect(w, r, "/login?error=Invalid+access+token", http.StatusSeeOther)
 		return
 	}
 	// Issue a fresh authenticated session (new CSRF) to prevent fixation.
 	srv.setSession(w, newSession(true))
+	srv.audit.Log(audit.Event{Action: "login", Actor: ip})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// clientIP returns the source IP of a request, without the port.
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func (srv *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

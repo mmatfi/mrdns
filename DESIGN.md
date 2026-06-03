@@ -118,7 +118,8 @@ internal/web/      handlers, auth + CSRF middleware, html/template + htmx (embed
 internal/zone/     parse / render / serial / checkzone            (done)
 internal/store/    live / draft / backups, locking                (done)
 internal/deploy/   ssh, two-phase pipeline, reload, verify        (done)
-internal/audit/    append-only JSONL                              (P4)
+internal/audit/    append-only JSONL                              (done)
+internal/metrics/  prometheus-format counters                     (done)
 configs/mrdns.example.yaml
 deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
 ```
@@ -140,8 +141,9 @@ deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
   results, history/rollback, and a servers page — all behind login + CSRF,
   server-rendered with htmx. (Inline record editing and live-streaming deploy
   progress are future niceties; edits today go via delete+add or the raw editor.)
-- **P4 — hardening/ops:** append-only audit log, metrics, rate-limit, install.sh
-  polish, docker-compose e2e.
+- **P4 — hardening/ops (done):** append-only JSONL audit log; Prometheus
+  `/metrics`; per-IP login rate limiting; Makefile + a dev config; and a manual
+  docker-compose BIND+sshd e2e target (`deploy/e2e`, not CI-verified).
 
 ## Scope notes
 

@@ -12,8 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mmatfi/mrdns/internal/audit"
 	"github.com/mmatfi/mrdns/internal/config"
 	"github.com/mmatfi/mrdns/internal/deploy"
+	"github.com/mmatfi/mrdns/internal/metrics"
 	"github.com/mmatfi/mrdns/internal/store"
 )
 
@@ -40,7 +42,7 @@ func (f *fakeDeployer) Deploy(_ context.Context, zoneName string) (*deploy.Resul
 	}, nil
 }
 
-func newTestServer(t *testing.T) (*Server, *store.Store, *fakeDeployer) {
+func buildServer(t *testing.T, auditW io.Writer) (*Server, *store.Store, *fakeDeployer) {
 	t.Helper()
 	d := t.TempDir()
 	st, err := store.New(filepath.Join(d, "live"), filepath.Join(d, "drafts"), filepath.Join(d, "backups"), filepath.Join(d, "locks"), 5)
@@ -60,11 +62,20 @@ func newTestServer(t *testing.T) (*Server, *store.Store, *fakeDeployer) {
 		Zones: map[string]config.Zone{"example.com": {File: "example.com.zone", Targets: []string{"ns1"}}},
 	}
 	dep := &fakeDeployer{}
-	srv, err := New(cfg, st, dep, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv, err := New(Deps{
+		Config: cfg, Store: st, Deployer: dep,
+		Audit:   audit.NewWriter(auditW),
+		Metrics: metrics.New(),
+		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return srv, st, dep
+}
+
+func newTestServer(t *testing.T) (*Server, *store.Store, *fakeDeployer) {
+	return buildServer(t, io.Discard)
 }
 
 // authed builds a request carrying a valid authenticated session and a matching
@@ -236,5 +247,36 @@ func TestCSRFRejectedOnMutation(t *testing.T) {
 	rec := do(srv, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("code %d, want 403 for bad CSRF", rec.Code)
+	}
+}
+
+func TestDeployIsAudited(t *testing.T) {
+	var buf bytes.Buffer
+	srv, _, _ := buildServer(t, &buf)
+	do(srv, authed(t, srv, "POST", "/zones/example.com/deploy", url.Values{}))
+	out := buf.String()
+	if !strings.Contains(out, `"action":"deploy"`) || !strings.Contains(out, "example.com") {
+		t.Errorf("deploy was not audited:\n%s", out)
+	}
+}
+
+func TestLoginRateLimited(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	var last int
+	for i := 0; i < 7; i++ {
+		req := httptest.NewRequest("POST", "/login", strings.NewReader(""))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		last = do(srv, req).Code
+	}
+	if last != http.StatusTooManyRequests {
+		t.Fatalf("after repeated attempts got %d, want 429", last)
+	}
+}
+
+func TestMetricsEndpointPublic(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	rec := do(srv, httptest.NewRequest("GET", "/metrics", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "mrdns_http_requests_total") {
+		t.Fatalf("metrics endpoint: code %d body %q", rec.Code, rec.Body.String())
 	}
 }

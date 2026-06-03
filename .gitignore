@@ -6,6 +6,7 @@
 *.test
 *.out
 /tmp/
+/.dev/
 
 # secrets / local config (never commit)
 *.env
@@ -13,3 +14,5 @@ mrdns.yaml
 !configs/*.yaml
 id_ed25519*
 known_hosts
+authorized_keys
+deploy/e2e/mrdns_key*

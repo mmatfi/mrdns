@@ -11,9 +11,12 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
+	"github.com/mmatfi/mrdns/internal/audit"
 	"github.com/mmatfi/mrdns/internal/config"
 	"github.com/mmatfi/mrdns/internal/deploy"
+	"github.com/mmatfi/mrdns/internal/metrics"
 	"github.com/mmatfi/mrdns/internal/store"
 )
 
@@ -29,11 +32,24 @@ type Deployer interface {
 	Deploy(ctx context.Context, zoneName string) (*deploy.Result, error)
 }
 
+// Deps are the dependencies for the web server.
+type Deps struct {
+	Config   *config.Config
+	Store    *store.Store
+	Deployer Deployer
+	Audit    *audit.Logger
+	Metrics  *metrics.Metrics
+	Logger   *slog.Logger
+}
+
 // Server holds the dependencies for the web UI.
 type Server struct {
 	cfg           *config.Config
 	store         *store.Store
 	deployer      Deployer
+	audit         *audit.Logger
+	metrics       *metrics.Metrics
+	loginLimiter  *rateLimiter
 	authToken     string
 	cookieKey     []byte
 	secureCookies bool
@@ -42,20 +58,27 @@ type Server struct {
 }
 
 // New parses the embedded templates and constructs a Server.
-func New(cfg *config.Config, st *store.Store, dep Deployer, log *slog.Logger) (*Server, error) {
+func New(d Deps) (*Server, error) {
 	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
+	met := d.Metrics
+	if met == nil {
+		met = metrics.New()
+	}
 	return &Server{
-		cfg:           cfg,
-		store:         st,
-		deployer:      dep,
-		authToken:     cfg.AuthToken,
-		cookieKey:     cfg.CookieKey,
-		secureCookies: cfg.SecureCookiesEnabled(),
+		cfg:           d.Config,
+		store:         d.Store,
+		deployer:      d.Deployer,
+		audit:         d.Audit,
+		metrics:       met,
+		loginLimiter:  newRateLimiter(5, time.Minute),
+		authToken:     d.Config.AuthToken,
+		cookieKey:     d.Config.CookieKey,
+		secureCookies: d.Config.SecureCookiesEnabled(),
 		tmpl:          tmpl,
-		log:           log,
+		log:           d.Logger,
 	}, nil
 }
 
@@ -65,6 +88,7 @@ func (srv *Server) Handler() http.Handler {
 
 	// Public routes.
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
+	mux.HandleFunc("GET /metrics", srv.metrics.Handler())
 	mux.HandleFunc("GET /login", srv.handleLoginForm)
 	mux.HandleFunc("POST /login", srv.handleLogin)
 	mux.HandleFunc("POST /logout", srv.handleLogout)

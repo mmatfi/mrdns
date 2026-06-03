@@ -1,0 +1,10 @@
+# Manual end-to-end test target for mrdns. Not run in CI. See README.md.
+services:
+  bind:
+    build: .
+    ports:
+      - "2222:22"
+      - "5353:53/tcp"
+      - "5353:53/udp"
+    volumes:
+      - ./authorized_keys:/authorized_keys:ro
