@@ -1,0 +1,7 @@
+# Scoped sudo rule for the mrdns deploy user on each target BIND server.
+# Install as /etc/sudoers.d/mrdns-deploy (mode 0440), validate with visudo -c.
+#
+# Grants ONLY the ability to reload/reconfigure named, nothing else.
+
+mrdns-deploy ALL=(root) NOPASSWD: /usr/sbin/rndc reload, /usr/sbin/rndc reload *, /usr/sbin/rndc reconfig
+Defaults:mrdns-deploy !requiretty

@@ -1,0 +1,49 @@
+# mrdns configuration.
+# Installed location: /opt/mrdns/etc/mrdns.yaml
+
+listen: "127.0.0.1:8080"        # bind locally; put behind a TLS reverse proxy
+secure_cookies: false           # set true once the UI is served over HTTPS
+
+zones_dir: /opt/mrdns/var       # holds live/ drafts/ backups/ log/
+audit_log: /opt/mrdns/var/log/audit.jsonl
+
+# Secrets are read from the environment, never from this file.
+# See deploy/mrdns.env.example.
+auth_token_env: MRDNS_TOKEN
+cookie_key_env: MRDNS_COOKIE_KEY
+
+# SOA serial bump policy on deploy: date (YYYYMMDDnn) | unixtime | increment
+serial_policy: date
+
+# Target BIND nameservers, reached over SSH. The deploy user needs write
+# access to remote_zone_dir (via a staging file) and a scoped sudo rule for
+# rndc (see deploy/sudoers.example). {zone} is substituted in reload_cmd.
+servers:
+  ns1:
+    host: ns1.example.net
+    port: 22
+    user: mrdns-deploy
+    ssh_key: /opt/mrdns/etc/id_ed25519
+    known_hosts: /opt/mrdns/etc/known_hosts
+    remote_zone_dir: /etc/bind/zones
+    checkzone_cmd: /usr/sbin/named-checkzone
+    reload_cmd: "sudo /usr/sbin/rndc reload {zone}"
+  ns2:
+    host: ns2.example.net
+    user: mrdns-deploy
+    ssh_key: /opt/mrdns/etc/id_ed25519
+    known_hosts: /opt/mrdns/etc/known_hosts
+    remote_zone_dir: /etc/bind/zones
+    checkzone_cmd: /usr/sbin/named-checkzone
+    reload_cmd: "sudo /usr/sbin/rndc reload {zone}"
+
+# Zones managed by the service. Each maps to a file under zones_dir and a set
+# of target servers. The zones must already be declared in each server's
+# named.conf (managing named.conf is out of scope).
+zones:
+  example.com:
+    file: example.com.zone
+    targets: [ns1, ns2]
+  0.168.192.in-addr.arpa:
+    file: rev-192-168-0.zone
+    targets: [ns1]

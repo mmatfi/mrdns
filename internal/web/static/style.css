@@ -1,0 +1,83 @@
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --line: #2a2f3a;
+  --fg: #e6e8ec;
+  --muted: #9aa3b2;
+  --accent: #5b9dff;
+  --error: #ff6b6b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; letter-spacing: .5px; color: var(--fg); text-decoration: none; }
+.logout button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.container { max-width: 960px; margin: 32px auto; padding: 0 20px; }
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.1rem; margin-top: 2rem; }
+a { color: var(--accent); }
+code { background: #11141a; padding: 1px 5px; border-radius: 4px; }
+.muted { color: var(--muted); }
+.error { color: var(--error); }
+
+table.grid { width: 100%; border-collapse: collapse; margin-top: 12px; }
+table.grid th, table.grid td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+table.grid th { color: var(--muted); font-weight: 600; }
+.tag {
+  display: inline-block;
+  background: #1e2632;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: .82rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 24px;
+}
+.card.login { max-width: 360px; margin: 8vh auto; }
+.card.login label { display: block; margin-bottom: 14px; color: var(--muted); }
+input, button {
+  font: inherit;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+input {
+  width: 100%;
+  margin-top: 4px;
+  background: #11141a;
+  border: 1px solid var(--line);
+  color: var(--fg);
+}
+button {
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #0b0d11;
+  font-weight: 600;
+}
+.foot { color: var(--muted); text-align: center; padding: 28px 0; font-size: .85rem; }

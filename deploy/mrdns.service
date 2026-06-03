@@ -1,0 +1,30 @@
+[Unit]
+Description=mrdns DNS zone editor and deployer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mrdns
+Group=mrdns
+EnvironmentFile=/opt/mrdns/etc/mrdns.env
+ExecStart=/opt/mrdns/bin/mrdns -config /opt/mrdns/etc/mrdns.yaml
+WorkingDirectory=/opt/mrdns
+Restart=on-failure
+RestartSec=2
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/mrdns/var
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

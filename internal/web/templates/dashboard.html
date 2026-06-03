@@ -1,0 +1,34 @@
+{{template "head" .}}
+<h1>Zones</h1>
+{{if .Zones}}
+<table class="grid">
+  <thead><tr><th>Zone</th><th>File</th><th>Targets</th><th></th></tr></thead>
+  <tbody>
+  {{range .Zones}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td><code>{{.File}}</code></td>
+      <td>{{range .Targets}}<span class="tag">{{.}}</span> {{end}}</td>
+      <td><a href="/zones/{{.Name}}">Edit</a></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No zones configured. Add entries under <code>zones:</code> in <code>mrdns.yaml</code>.</p>
+{{end}}
+
+<h2>Target servers</h2>
+{{if .Servers}}
+<table class="grid">
+  <thead><tr><th>Name</th><th>Host</th><th>Deploy user</th></tr></thead>
+  <tbody>
+  {{range .Servers}}
+    <tr><td>{{.Name}}</td><td>{{.Host}}</td><td>{{.User}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No servers configured.</p>
+{{end}}
+{{template "foot" .}}

@@ -1,0 +1,28 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · mrdns</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">mrdns</a>
+  {{if .Authed}}
+  <form method="post" action="/logout" class="logout">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit">Log out</button>
+  </form>
+  {{end}}
+</header>
+<main class="container">
+{{end}}
+
+{{define "foot"}}
+</main>
+<footer class="foot">mrdns — DNS zone editor &amp; deployer</footer>
+</body>
+</html>
+{{end}}

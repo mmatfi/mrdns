@@ -1,0 +1,15 @@
+# build output (root binary from `go build ./cmd/mrdns`)
+/dist/
+/mrdns
+
+# local run artifacts
+*.test
+*.out
+/tmp/
+
+# secrets / local config (never commit)
+*.env
+mrdns.yaml
+!configs/*.yaml
+id_ed25519*
+known_hosts
