@@ -11,11 +11,12 @@ over SSH to predefined nameservers, reloading `named` afterward.
 
 See [DESIGN.md](DESIGN.md) for the full design and roadmap.
 
-> Status: **P2** — on top of P0 (scaffold/auth) and P1 (zone core + flat-file
-> store), the SSH deploy engine is in: host-key-pinned SSH/SFTP and the
-> two-phase pipeline (stage + `named-checkzone` on every target → commit +
-> `rndc reload` → verify SOA), with per-server result reporting. The editing
-> UI that drives it lands in P3.
+> Status: **P3** — the web UI is in. Sign in, browse zones, edit records
+> (add/delete) or the raw zone file into a draft, review the draft-vs-live diff,
+> validate, and deploy to all targets with per-server results, plus
+> history/rollback. Built on P0–P2 (auth, zone core + flat-file store, SSH
+> deploy engine). Remaining: **P4** hardening/ops (audit log, metrics, install
+> polish, container e2e).
 
 ## Build & run (local dev)
 

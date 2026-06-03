@@ -1,0 +1,46 @@
+{{define "records"}}
+<div id="records">
+  {{if .RecErr}}<p class="error">{{.RecErr}}</p>{{end}}
+  <table class="grid">
+    <thead><tr><th>Name</th><th>TTL</th><th>Type</th><th>Data</th><th></th></tr></thead>
+    <tbody>
+    {{range .Records}}
+      <tr>
+        <td>{{.Name}}</td><td>{{.TTL}}</td><td>{{.Type}}</td><td><code>{{.Data}}</code></td>
+        <td>
+        {{if .Managed}}<span class="muted">managed</span>{{else}}
+          <form action="/zones/{{$.Zone}}/records/delete" method="post" hx-post="/zones/{{$.Zone}}/records/delete" hx-target="#records" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="name" value="{{.Name}}">
+            <input type="hidden" name="type" value="{{.Type}}">
+            <input type="hidden" name="data" value="{{.Data}}">
+            <button class="link danger">delete</button>
+          </form>
+        {{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+
+  <form class="addrow" action="/zones/{{.Zone}}/records" method="post" hx-post="/zones/{{.Zone}}/records" hx-target="#records" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input name="name" placeholder="name (www or @)" required>
+    <input name="ttl" value="3600" size="6" aria-label="TTL">
+    <input name="type" placeholder="type" list="rtypes" size="6" required>
+    <input name="data" placeholder="data (e.g. 192.0.2.10)" required>
+    <button class="primary">Add record</button>
+  </form>
+  <datalist id="rtypes">
+    <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option>
+    <option>TXT</option><option>NS</option><option>SRV</option><option>PTR</option><option>CAA</option>
+  </datalist>
+</div>
+{{end}}
+
+{{define "validate_result"}}
+<div class="opbox {{if .OK}}ok{{else}}bad{{end}}">
+  {{if .OK}}<strong>Valid.</strong> {{.Msg}}{{else}}<strong>Invalid.</strong>{{end}}
+  {{if .Detail}}<pre>{{.Detail}}</pre>{{end}}
+</div>
+{{end}}

@@ -1,0 +1,38 @@
+{{template "head" .}}
+<p class="crumb"><a href="/">&larr; Zones</a></p>
+<h1>{{.Zone}}</h1>
+{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+
+{{if .LoadErr}}
+  <p class="error">{{.LoadErr}}</p>
+  <p><a class="btn" href="/zones/{{.Zone}}/raw">Open raw editor</a></p>
+{{else if .ParseErr}}
+  <p class="error">This zone does not parse: {{.ParseErr}}</p>
+  <p>Fix it in the <a href="/zones/{{.Zone}}/raw">raw editor</a>.</p>
+{{else}}
+  <p class="meta">
+    {{if .IsDraft}}<span class="badge draft">draft · unpublished</span>{{else}}<span class="badge live">live</span>{{end}}
+    · serial {{.Serial}} · targets: {{range .Targets}}<span class="tag">{{.}}</span> {{end}}
+  </p>
+
+  <div class="actions">
+    <form action="/zones/{{.Zone}}/validate" method="post" hx-post="/zones/{{.Zone}}/validate" hx-target="#opresult">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button>Validate</button>
+    </form>
+    <a class="btn" href="/zones/{{.Zone}}/diff">Diff</a>
+    <form action="/zones/{{.Zone}}/deploy" method="post" onsubmit="return confirm('Deploy {{.Zone}} to all targets?')">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="primary">Deploy</button>
+    </form>
+    <a class="btn" href="/zones/{{.Zone}}/history">History</a>
+    <a class="btn" href="/zones/{{.Zone}}/raw">Raw edit</a>
+    {{if .IsDraft}}
+    <form action="/zones/{{.Zone}}/discard" method="post" onsubmit="return confirm('Discard draft changes?')">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="danger">Discard draft</button>
+    </form>
+    {{end}}
+  </div>
+
+  <div id="opresult"></div>
+  {{template "records" .}}
+{{end}}
+{{template "foot" .}}

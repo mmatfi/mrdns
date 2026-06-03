@@ -1,0 +1,28 @@
+{{template "head" .}}
+<p class="crumb"><a href="/zones/{{.Zone}}">&larr; {{.Zone}}</a></p>
+<h1>History — {{.Zone}}</h1>
+{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+{{if .Backups}}
+<table class="grid">
+  <thead><tr><th>Backup</th><th>When</th><th>Bytes</th><th></th></tr></thead>
+  <tbody>
+  {{range .Backups}}
+    <tr>
+      <td><code>{{.ID}}</code></td>
+      <td>{{.When}}</td>
+      <td>{{.Size}}</td>
+      <td>
+        <form action="/zones/{{$.Zone}}/rollback" method="post" onsubmit="return confirm('Restore this version into the draft?')">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button class="link">restore to draft</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No backups yet. A backup is created each time a deploy promotes new content.</p>
+{{end}}
+{{template "foot" .}}

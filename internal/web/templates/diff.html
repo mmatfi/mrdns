@@ -1,0 +1,14 @@
+{{template "head" .}}
+<p class="crumb"><a href="/zones/{{.Zone}}">&larr; {{.Zone}}</a></p>
+<h1>Diff — {{.Zone}}</h1>
+<p class="muted">draft vs live</p>
+{{if not .HasDraft}}
+  <p class="muted">No draft — nothing to compare.</p>
+{{else}}
+  {{if and (not .Added) (not .Removed)}}<p class="muted">Draft is identical to live.</p>{{end}}
+  {{if .Removed}}<h2>Removed</h2><pre class="diff removed">{{range .Removed}}- {{.}}
+{{end}}</pre>{{end}}
+  {{if .Added}}<h2>Added</h2><pre class="diff added">{{range .Added}}+ {{.}}
+{{end}}</pre>{{end}}
+{{end}}
+{{template "foot" .}}

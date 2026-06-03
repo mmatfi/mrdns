@@ -60,8 +60,6 @@ func (srv *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	s, _ := srv.currentSession(r)
-
 	type zoneRow struct {
 		Name    string
 		File    string
@@ -84,13 +82,45 @@ func (srv *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
 
-	srv.render(w, "dashboard.html", map[string]any{
-		"Title":   "Zones",
-		"Authed":  true,
-		"CSRF":    csrfOf(s),
+	srv.render(w, "dashboard.html", srv.pageData(r, "Zones", map[string]any{
 		"Zones":   zones,
 		"Servers": servers,
-	})
+	}))
+}
+
+func (srv *Server) handleServers(w http.ResponseWriter, r *http.Request) {
+	type row struct {
+		Name, Host, User, RemoteDir string
+		Port                        int
+		Zones                       []string
+	}
+	rows := make([]row, 0, len(srv.cfg.Servers))
+	for name, sv := range srv.cfg.Servers {
+		var zones []string
+		for zn, zc := range srv.cfg.Zones {
+			for _, t := range zc.Targets {
+				if t == name {
+					zones = append(zones, zn)
+				}
+			}
+		}
+		sort.Strings(zones)
+		rows = append(rows, row{Name: name, Host: sv.Host, User: sv.User, RemoteDir: sv.RemoteZoneDir, Port: sv.Port, Zones: zones})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+
+	srv.render(w, "servers.html", srv.pageData(r, "Servers", map[string]any{"Servers": rows}))
+}
+
+// pageData builds the common template data (title, auth state, CSRF) merged
+// with page-specific values.
+func (srv *Server) pageData(r *http.Request, title string, extra map[string]any) map[string]any {
+	s, _ := srv.currentSession(r)
+	d := map[string]any{"Title": title, "Authed": true, "CSRF": csrfOf(s)}
+	for k, v := range extra {
+		d[k] = v
+	}
+	return d
 }
 
 // render executes a named template into a buffer first so a template error

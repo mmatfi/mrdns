@@ -1,0 +1,29 @@
+{{template "head" .}}
+<p class="crumb"><a href="/zones/{{.Zone}}">&larr; {{.Zone}}</a></p>
+<h1>Deploy — {{.Zone}}</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{with .Result}}
+  <p class="meta">
+    status: <span class="badge status-{{.Status}}">{{.Status}}</span>
+    · serial {{.OldSerial}} &rarr; {{.NewSerial}}
+    · {{if .Promoted}}promoted to live{{else}}not promoted{{end}}
+  </p>
+  <table class="grid">
+    <thead><tr><th>Server</th><th>Staged</th><th>Checked</th><th>Moved</th><th>Reloaded</th><th>Verified</th><th>Detail</th></tr></thead>
+    <tbody>
+    {{range .Servers}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{if .Staged}}✓{{else}}—{{end}}</td>
+        <td>{{if .Checked}}✓{{else}}—{{end}}</td>
+        <td>{{if .Moved}}✓{{else}}—{{end}}</td>
+        <td>{{if .Reloaded}}✓{{else}}—{{end}}</td>
+        <td>{{if .Verified}}✓{{else}}—{{end}}</td>
+        <td>{{if .Err}}<span class="error">{{.Err}}</span> {{end}}{{if .Output}}<code>{{.Output}}</code>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+{{end}}
+<p><a class="btn" href="/zones/{{.Zone}}">Back to editor</a></p>
+{{template "foot" .}}

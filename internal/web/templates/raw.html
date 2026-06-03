@@ -1,0 +1,13 @@
+{{template "head" .}}
+<p class="crumb"><a href="/zones/{{.Zone}}">&larr; {{.Zone}}</a></p>
+<h1>Raw edit — {{.Zone}}</h1>
+{{if .Err}}<p class="error">{{.Err}}</p>{{end}}
+<form action="/zones/{{.Zone}}/raw" method="post">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <textarea name="content" rows="24" spellcheck="false">{{.Content}}</textarea>
+  <div class="actions">
+    <button class="primary">Save draft</button>
+    <a class="btn" href="/zones/{{.Zone}}">Cancel</a>
+  </div>
+</form>
+{{template "foot" .}}

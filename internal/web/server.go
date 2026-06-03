@@ -5,6 +5,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"html/template"
 	"io/fs"
@@ -12,6 +13,8 @@ import (
 	"net/http"
 
 	"github.com/mmatfi/mrdns/internal/config"
+	"github.com/mmatfi/mrdns/internal/deploy"
+	"github.com/mmatfi/mrdns/internal/store"
 )
 
 //go:embed templates/*.html
@@ -20,9 +23,17 @@ var templatesFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
+// Deployer validates and rolls a zone out to its targets. Implemented by
+// *deploy.Pipeline; an interface so the web layer is testable without SSH.
+type Deployer interface {
+	Deploy(ctx context.Context, zoneName string) (*deploy.Result, error)
+}
+
 // Server holds the dependencies for the web UI.
 type Server struct {
 	cfg           *config.Config
+	store         *store.Store
+	deployer      Deployer
 	authToken     string
 	cookieKey     []byte
 	secureCookies bool
@@ -31,13 +42,15 @@ type Server struct {
 }
 
 // New parses the embedded templates and constructs a Server.
-func New(cfg *config.Config, log *slog.Logger) (*Server, error) {
+func New(cfg *config.Config, st *store.Store, dep Deployer, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
 		cfg:           cfg,
+		store:         st,
+		deployer:      dep,
 		authToken:     cfg.AuthToken,
 		cookieKey:     cfg.CookieKey,
 		secureCookies: cfg.SecureCookiesEnabled(),
@@ -55,12 +68,24 @@ func (srv *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /login", srv.handleLoginForm)
 	mux.HandleFunc("POST /login", srv.handleLogin)
 	mux.HandleFunc("POST /logout", srv.handleLogout)
-
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticSub)))
 
 	// Authenticated routes.
-	mux.Handle("GET /{$}", srv.requireAuth(http.HandlerFunc(srv.handleDashboard)))
+	auth := func(h http.HandlerFunc) http.Handler { return srv.requireAuth(h) }
+	mux.Handle("GET /{$}", auth(srv.handleDashboard))
+	mux.Handle("GET /servers", auth(srv.handleServers))
+	mux.Handle("GET /zones/{zone}", auth(srv.handleEditor))
+	mux.Handle("GET /zones/{zone}/raw", auth(srv.handleRawForm))
+	mux.Handle("POST /zones/{zone}/raw", auth(srv.handleRawSave))
+	mux.Handle("POST /zones/{zone}/records", auth(srv.handleAddRecord))
+	mux.Handle("POST /zones/{zone}/records/delete", auth(srv.handleDeleteRecord))
+	mux.Handle("POST /zones/{zone}/discard", auth(srv.handleDiscard))
+	mux.Handle("GET /zones/{zone}/diff", auth(srv.handleDiff))
+	mux.Handle("POST /zones/{zone}/validate", auth(srv.handleValidate))
+	mux.Handle("POST /zones/{zone}/deploy", auth(srv.handleDeploy))
+	mux.Handle("GET /zones/{zone}/history", auth(srv.handleHistory))
+	mux.Handle("POST /zones/{zone}/rollback", auth(srv.handleRollback))
 
 	return srv.recoverer(srv.logRequests(mux))
 }

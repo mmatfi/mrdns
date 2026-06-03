@@ -118,7 +118,7 @@ internal/web/      handlers, auth + CSRF middleware, html/template + htmx (embed
 internal/zone/     parse / render / serial / checkzone            (done)
 internal/store/    live / draft / backups, locking                (done)
 internal/deploy/   ssh, two-phase pipeline, reload, verify        (done)
-internal/audit/    append-only JSONL                              (P3)
+internal/audit/    append-only JSONL                              (P4)
 configs/mrdns.example.yaml
 deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
 ```
@@ -135,10 +135,13 @@ deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
   stage→commit→reload→verify pipeline with per-server result aggregation. Tested
   with an in-process SSH server (real transport: pinning, key auth, exec, SFTP)
   plus fake-connection orchestration tests; race-clean.
-- **P3 — UI flow:** record-table editor → diff → deploy progress →
-  history/rollback → servers/audit.
-- **P4 — hardening/ops:** metrics, rate-limit, install.sh polish, docker-compose
-  e2e.
+- **P3 — UI flow (done):** record-table editor (add/delete) plus a raw-text
+  editor writing to drafts, draft-vs-live diff, validate, deploy with per-server
+  results, history/rollback, and a servers page — all behind login + CSRF,
+  server-rendered with htmx. (Inline record editing and live-streaming deploy
+  progress are future niceties; edits today go via delete+add or the raw editor.)
+- **P4 — hardening/ops:** append-only audit log, metrics, rate-limit, install.sh
+  polish, docker-compose e2e.
 
 ## Scope notes
 

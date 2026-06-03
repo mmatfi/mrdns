@@ -1,0 +1,19 @@
+{{template "head" .}}
+<h1>Target servers</h1>
+{{if .Servers}}
+<table class="grid">
+  <thead><tr><th>Name</th><th>Host</th><th>User</th><th>Port</th><th>Remote dir</th><th>Zones</th></tr></thead>
+  <tbody>
+  {{range .Servers}}
+    <tr>
+      <td>{{.Name}}</td><td>{{.Host}}</td><td>{{.User}}</td><td>{{.Port}}</td>
+      <td><code>{{.RemoteDir}}</code></td>
+      <td>{{range .Zones}}<span class="tag">{{.}}</span> {{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No servers configured.</p>
+{{end}}
+{{template "foot" .}}
