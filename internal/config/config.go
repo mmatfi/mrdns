@@ -25,6 +25,7 @@ const (
 	DefaultTokenEnv   = "MRDNS_TOKEN"
 	DefaultCookieEnv  = "MRDNS_COOKIE_KEY"
 	DefaultCheckzone  = "named-checkzone"
+	DefaultBackupKeep = 20
 )
 
 // Config is the top-level service configuration.
@@ -36,6 +37,7 @@ type Config struct {
 	AuthTokenEnv  string            `yaml:"auth_token_env"`
 	CookieKeyEnv  string            `yaml:"cookie_key_env"`
 	SerialPolicy  string            `yaml:"serial_policy"`
+	BackupKeep    int               `yaml:"backup_keep"`
 	Servers       map[string]Server `yaml:"servers"`
 	Zones         map[string]Zone   `yaml:"zones"`
 
@@ -98,6 +100,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.SerialPolicy == "" {
 		c.SerialPolicy = "date"
+	}
+	if c.BackupKeep <= 0 {
+		c.BackupKeep = DefaultBackupKeep
 	}
 	for name, s := range c.Servers {
 		if s.Port == 0 {
@@ -181,8 +186,9 @@ func (c *Config) SecureCookiesEnabled() bool {
 	return c.SecureCookies == nil || *c.SecureCookies
 }
 
-// LiveDir, DraftDir, and BackupDir are the on-disk working directories derived
-// from ZonesDir (used by later phases).
+// LiveDir, DraftDir, BackupDir, and LockDir are the on-disk working
+// directories derived from ZonesDir.
 func (c *Config) LiveDir() string   { return filepath.Join(c.ZonesDir, "live") }
 func (c *Config) DraftDir() string  { return filepath.Join(c.ZonesDir, "drafts") }
 func (c *Config) BackupDir() string { return filepath.Join(c.ZonesDir, "backups") }
+func (c *Config) LockDir() string   { return filepath.Join(c.ZonesDir, "locks") }

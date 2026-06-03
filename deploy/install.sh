@@ -18,7 +18,7 @@ echo ">> creating layout under ${PREFIX}"
 install -d -m 0755 "${PREFIX}/bin" "${PREFIX}/etc"
 install -d -o "${SVC_USER}" -g "${SVC_GROUP}" -m 0750 \
   "${PREFIX}/var" "${PREFIX}/var/live" "${PREFIX}/var/drafts" \
-  "${PREFIX}/var/backups" "${PREFIX}/var/log"
+  "${PREFIX}/var/backups" "${PREFIX}/var/log" "${PREFIX}/var/locks"
 
 echo ">> installing binary"
 install -m 0755 ./dist/mrdns "${PREFIX}/bin/mrdns"

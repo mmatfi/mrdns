@@ -11,8 +11,11 @@ over SSH to predefined nameservers, reloading `named` afterward.
 
 See [DESIGN.md](DESIGN.md) for the full design and roadmap.
 
-> Status: **P0 scaffold** — config, auth/session/CSRF, dashboard, `/healthz`.
-> Zone editing and the SSH deploy engine land in P1–P3.
+> Status: **P1** — on top of the P0 scaffold (config, auth/session/CSRF,
+> dashboard, `/healthz`), zone parse/render, SOA serial policies, the
+> `named-checkzone` wrapper, and the live/draft/backup flat-file store (with
+> locking + tests) are in. The SSH deploy engine and the editing UI land in
+> P2–P3.
 
 ## Build & run (local dev)
 

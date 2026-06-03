@@ -14,6 +14,7 @@ cookie_key_env: MRDNS_COOKIE_KEY
 
 # SOA serial bump policy on deploy: date (YYYYMMDDnn) | unixtime | increment
 serial_policy: date
+backup_keep: 20                 # versions of each zone retained under var/backups
 
 # Target BIND nameservers, reached over SSH. The deploy user needs write
 # access to remote_zone_dir (via a staging file) and a scoped sudo rule for
