@@ -117,7 +117,7 @@ internal/config/   YAML load + validate, /opt/mrdns paths, env secrets
 internal/web/      handlers, auth + CSRF middleware, html/template + htmx (embed.FS)
 internal/zone/     parse / render / serial / checkzone            (done)
 internal/store/    live / draft / backups, locking                (done)
-internal/deploy/   ssh, two-phase pipeline, reload, verify        (P2)
+internal/deploy/   ssh, two-phase pipeline, reload, verify        (done)
 internal/audit/    append-only JSONL                              (P3)
 configs/mrdns.example.yaml
 deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
@@ -131,8 +131,10 @@ deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
   `named-checkzone` wrapper, and the live/draft/backups flat-file store with
   per-zone locking. Unit tests cover round-trips, serial policies, the draft
   lifecycle, backup/restore/prune, and config validation.
-- **P2 — deploy engine:** SSH/SFTP, two-phase stage→commit→reload→verify.
-  Integration test against a BIND+sshd container.
+- **P2 — deploy engine (done):** host-key-pinned SSH/SFTP and the two-phase
+  stage→commit→reload→verify pipeline with per-server result aggregation. Tested
+  with an in-process SSH server (real transport: pinning, key auth, exec, SFTP)
+  plus fake-connection orchestration tests; race-clean.
 - **P3 — UI flow:** record-table editor → diff → deploy progress →
   history/rollback → servers/audit.
 - **P4 — hardening/ops:** metrics, rate-limit, install.sh polish, docker-compose

@@ -11,11 +11,11 @@ over SSH to predefined nameservers, reloading `named` afterward.
 
 See [DESIGN.md](DESIGN.md) for the full design and roadmap.
 
-> Status: **P1** — on top of the P0 scaffold (config, auth/session/CSRF,
-> dashboard, `/healthz`), zone parse/render, SOA serial policies, the
-> `named-checkzone` wrapper, and the live/draft/backup flat-file store (with
-> locking + tests) are in. The SSH deploy engine and the editing UI land in
-> P2–P3.
+> Status: **P2** — on top of P0 (scaffold/auth) and P1 (zone core + flat-file
+> store), the SSH deploy engine is in: host-key-pinned SSH/SFTP and the
+> two-phase pipeline (stage + `named-checkzone` on every target → commit +
+> `rndc reload` → verify SOA), with per-server result reporting. The editing
+> UI that drives it lands in P3.
 
 ## Build & run (local dev)
 
