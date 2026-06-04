@@ -18,6 +18,7 @@ import (
 type recordRow struct {
 	Name, TTL, Type, Data string
 	Managed               bool // SOA: shown read-only
+	Editing               bool // rendered as an inline edit form
 }
 
 func recordRows(z *zone.Zone) []recordRow {
@@ -33,6 +34,16 @@ func recordRows(z *zone.Zone) []recordRow {
 		})
 	}
 	return rows
+}
+
+// markEditing flags the first row matching (name, rtype, data) for inline edit.
+func markEditing(rows []recordRow, name, rtype, data string) {
+	for i := range rows {
+		if rows[i].Name == name && rows[i].Type == rtype && rows[i].Data == data {
+			rows[i].Editing = true
+			return
+		}
+	}
 }
 
 // zoneConfig resolves the zone from the path, writing a 404 if unknown.
@@ -131,6 +142,7 @@ func (srv *Server) handleAddRecord(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	srv.audit.Log(audit.Event{Action: "record_add", Actor: clientIP(r), Zone: name})
 	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
 }
 
@@ -155,7 +167,108 @@ func (srv *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	srv.audit.Log(audit.Event{Action: "record_delete", Actor: clientIP(r), Zone: name})
 	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
+}
+
+// handleRecordsFragment returns the records table (used to refresh or to cancel
+// an inline edit).
+func (srv *Server) handleRecordsFragment(w http.ResponseWriter, r *http.Request) {
+	name, z, ok := srv.loadEditableZone(w, r)
+	if !ok {
+		return
+	}
+	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
+}
+
+// handleEditRecordForm returns the records table with one row switched to an
+// inline edit form.
+func (srv *Server) handleEditRecordForm(w http.ResponseWriter, r *http.Request) {
+	name, z, ok := srv.loadEditableZone(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	rows := recordRows(z)
+	markEditing(rows, q.Get("name"), q.Get("type"), q.Get("data"))
+	srv.renderRecordsFragment(w, r, name, rows, "")
+}
+
+// handleUpdateRecord replaces a record (identified by its old name/type/data)
+// with edited values, writing the result to the draft.
+func (srv *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
+	name, zc, ok := srv.zoneConfig(w, r)
+	if !ok {
+		return
+	}
+	_ = r.ParseForm()
+	oldName := r.PostFormValue("old_name")
+	oldType := r.PostFormValue("old_type")
+	oldData := r.PostFormValue("old_data")
+	newName := strings.TrimSpace(r.PostFormValue("name"))
+	ttl := strings.TrimSpace(r.PostFormValue("ttl"))
+	newType := strings.ToUpper(strings.TrimSpace(r.PostFormValue("type")))
+	data := strings.TrimSpace(r.PostFormValue("data"))
+
+	content, _, err := srv.currentContent(zc)
+	if err != nil {
+		http.Error(w, "load zone: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	z, err := zone.Parse(content, name)
+	if err != nil {
+		http.Error(w, "parse zone: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	editErr := func(msg string) {
+		rows := recordRows(z)
+		markEditing(rows, oldName, oldType, oldData)
+		srv.renderRecordsFragment(w, r, name, rows, msg)
+	}
+	if newName == "" || newType == "" || data == "" {
+		editErr("name, type, and data are required")
+		return
+	}
+	if ttl == "" {
+		ttl = "3600"
+	}
+	line := newName + " " + ttl + " IN " + newType + " " + data
+	replaced, err := z.Replace(oldName, oldType, oldData, line)
+	if err != nil {
+		editErr(err.Error())
+		return
+	}
+	if !replaced {
+		editErr("record not found (it may have changed); the table was reloaded")
+		return
+	}
+	if err := srv.store.WriteDraft(zc.File, z.Render()); err != nil {
+		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	srv.audit.Log(audit.Event{Action: "record_update", Actor: clientIP(r), Zone: name})
+	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
+}
+
+// loadEditableZone resolves and parses the current draft-or-live content of the
+// path's zone, writing an HTTP error and returning ok=false on failure.
+func (srv *Server) loadEditableZone(w http.ResponseWriter, r *http.Request) (string, *zone.Zone, bool) {
+	name, zc, ok := srv.zoneConfig(w, r)
+	if !ok {
+		return "", nil, false
+	}
+	content, _, err := srv.currentContent(zc)
+	if err != nil {
+		http.Error(w, "load zone: "+err.Error(), http.StatusInternalServerError)
+		return "", nil, false
+	}
+	z, err := zone.Parse(content, name)
+	if err != nil {
+		http.Error(w, "parse zone: "+err.Error(), http.StatusInternalServerError)
+		return "", nil, false
+	}
+	return name, z, true
 }
 
 func (srv *Server) handleRawForm(w http.ResponseWriter, r *http.Request) {

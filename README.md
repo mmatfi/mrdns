@@ -12,7 +12,7 @@ over SSH to predefined nameservers, reloading `named` afterward.
 See [DESIGN.md](DESIGN.md) for the full design and roadmap.
 
 > Status: **feature-complete (P0–P4).** Sign in, browse zones, edit records
-> (add/delete) or the raw zone file into a draft, review the draft-vs-live diff,
+> inline (add/edit/delete) into a draft, review the draft-vs-live diff,
 > validate, and deploy over SSH to all targets with per-server results, plus
 > history/rollback. Hardening is in: append-only audit log, Prometheus
 > `/metrics`, and per-IP login rate limiting. See [DESIGN.md](DESIGN.md) for

@@ -5,20 +5,34 @@
     <thead><tr><th>Name</th><th>TTL</th><th>Type</th><th>Data</th><th></th></tr></thead>
     <tbody>
     {{range .Records}}
+      {{if .Editing}}
+      <tr class="editing">
+        <td><input name="name" value="{{.Name}}" aria-label="name"></td>
+        <td><input name="ttl" value="{{.TTL}}" size="6" aria-label="TTL"></td>
+        <td><input name="type" value="{{.Type}}" size="7" list="rtypes" aria-label="type"></td>
+        <td><input name="data" value="{{.Data}}" aria-label="data"></td>
+        <td class="rowactions">
+          <input type="hidden" name="old_name" value="{{.Name}}">
+          <input type="hidden" name="old_type" value="{{.Type}}">
+          <input type="hidden" name="old_data" value="{{.Data}}">
+          <button type="button" class="primary" hx-post="/zones/{{$.Zone}}/records/update" hx-include="closest tr" hx-target="#records" hx-swap="outerHTML">save</button>
+          <button type="button" class="link" hx-get="/zones/{{$.Zone}}/records" hx-target="#records" hx-swap="outerHTML">cancel</button>
+        </td>
+      </tr>
+      {{else}}
       <tr>
         <td>{{.Name}}</td><td>{{.TTL}}</td><td>{{.Type}}</td><td><code>{{.Data}}</code></td>
-        <td>
+        <td class="rowactions">
         {{if .Managed}}<span class="muted">managed</span>{{else}}
-          <form action="/zones/{{$.Zone}}/records/delete" method="post" hx-post="/zones/{{$.Zone}}/records/delete" hx-target="#records" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-            <input type="hidden" name="name" value="{{.Name}}">
-            <input type="hidden" name="type" value="{{.Type}}">
-            <input type="hidden" name="data" value="{{.Data}}">
-            <button class="link danger">delete</button>
-          </form>
+          <input type="hidden" name="name" value="{{.Name}}">
+          <input type="hidden" name="type" value="{{.Type}}">
+          <input type="hidden" name="data" value="{{.Data}}">
+          <button type="button" class="link" hx-get="/zones/{{$.Zone}}/records/edit" hx-include="closest tr" hx-target="#records" hx-swap="outerHTML">edit</button>
+          <button type="button" class="link danger" hx-post="/zones/{{$.Zone}}/records/delete" hx-include="closest tr" hx-target="#records" hx-swap="outerHTML">delete</button>
         {{end}}
         </td>
       </tr>
+      {{end}}
     {{end}}
     </tbody>
   </table>
@@ -27,9 +41,9 @@
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input name="name" placeholder="name (www or @)" required>
     <input name="ttl" value="3600" size="6" aria-label="TTL">
-    <input name="type" placeholder="type" list="rtypes" size="6" required>
+    <input name="type" placeholder="type" list="rtypes" size="7" required>
     <input name="data" placeholder="data (e.g. 192.0.2.10)" required>
-    <button class="primary">Add record</button>
+    <button type="submit" class="primary">Add record</button>
   </form>
   <datalist id="rtypes">
     <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option>

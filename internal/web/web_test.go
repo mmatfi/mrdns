@@ -163,6 +163,66 @@ func TestAddInvalidRecordReportsError(t *testing.T) {
 	}
 }
 
+func TestRecordsFragment(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	rec := do(srv, authed(t, srv, "GET", "/zones/example.com/records", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "www.example.com.") {
+		t.Fatalf("records fragment: code %d body %q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestEditRecordFormShowsInputs(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	rec := do(srv, authed(t, srv, "GET", "/zones/example.com/records/edit?name=www.example.com.&type=A&data=192.0.2.2", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="old_data"`) || !strings.Contains(body, `value="192.0.2.2"`) {
+		t.Errorf("inline edit form not rendered:\n%s", body)
+	}
+}
+
+func TestUpdateRecordEditsDraft(t *testing.T) {
+	srv, st, _ := newTestServer(t)
+	form := url.Values{
+		"old_name": {"www.example.com."}, "old_type": {"A"}, "old_data": {"192.0.2.2"},
+		"name": {"www"}, "ttl": {"3600"}, "type": {"A"}, "data": {"192.0.2.22"},
+	}
+	rec := do(srv, authed(t, srv, "POST", "/zones/example.com/records/update", form))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code %d body %s", rec.Code, rec.Body)
+	}
+	draft, _ := st.ReadDraft("example.com.zone")
+	if !strings.Contains(string(draft), "192.0.2.22") {
+		t.Errorf("draft missing the edited value:\n%s", draft)
+	}
+	if strings.Contains(string(draft), "192.0.2.2\n") {
+		t.Errorf("draft still has the old value:\n%s", draft)
+	}
+}
+
+func TestUpdateRecordInvalidKeepsEditing(t *testing.T) {
+	srv, st, _ := newTestServer(t)
+	form := url.Values{
+		"old_name": {"www.example.com."}, "old_type": {"A"}, "old_data": {"192.0.2.2"},
+		"name": {"www"}, "ttl": {"3600"}, "type": {"A"}, "data": {"not-an-ip"},
+	}
+	rec := do(srv, authed(t, srv, "POST", "/zones/example.com/records/update", form))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code %d", rec.Code)
+	}
+	if !strings.Contains(strings.ToLower(rec.Body.String()), "invalid") {
+		t.Errorf("expected an error message, got:\n%s", rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `name="old_data"`) {
+		t.Error("expected the row to stay in edit mode on error")
+	}
+	if st.HasDraft("example.com.zone") {
+		t.Error("an invalid update should not write a draft")
+	}
+}
+
 func TestDeleteRecord(t *testing.T) {
 	srv, st, _ := newTestServer(t)
 	form := url.Values{"name": {"www.example.com."}, "type": {"A"}, "data": {"192.0.2.2"}}

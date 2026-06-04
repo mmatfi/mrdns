@@ -24,7 +24,7 @@
       <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="primary">Deploy</button>
     </form>
     <a class="btn" href="/zones/{{.Zone}}/history">History</a>
-    <a class="btn" href="/zones/{{.Zone}}/raw">Raw edit</a>
+    <a class="btn" href="/zones/{{.Zone}}/raw">Raw (advanced)</a>
     {{if .IsDraft}}
     <form action="/zones/{{.Zone}}/discard" method="post" onsubmit="return confirm('Discard draft changes?')">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="danger">Discard draft</button>

@@ -119,6 +119,11 @@ pre.diff.removed { background: #240f0f; color: #ff9b9b; }
 .addrow input { width: auto; flex: 1 1 120px; }
 .addrow input[name="data"] { flex: 2 1 220px; }
 
+.rowactions { white-space: nowrap; }
+.rowactions button { margin-right: 8px; }
+tr.editing { background: #161c12; }
+tr.editing input { width: 100%; background: #11141a; border: 1px solid var(--line); color: var(--fg); border-radius: 4px; padding: 4px 6px; }
+
 textarea {
   width: 100%; background: #11141a; border: 1px solid var(--line); color: var(--fg);
   border-radius: 6px; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

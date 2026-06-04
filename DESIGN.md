@@ -35,6 +35,11 @@ them, and deploys them over **SSH** to predefined BIND servers, reloading
 
 Runs as a dedicated `mrdns` user that owns `var/` and only reads `etc/`.
 
+Records are edited as structured rows (add / inline-edit / delete); the service
+parses the BIND zone file, applies the change, and re-renders it. The zone files
+themselves remain the source of truth and the deploy artifact, so there is no
+separate database to keep in sync.
+
 ## Data model: live / draft / backup
 
 - **Edit → draft.** UI edits write to `drafts/`, never to the live file.
@@ -136,11 +141,12 @@ deploy/            mrdns.service, mrdns.env.example, sudoers.example, install.sh
   stage→commit→reload→verify pipeline with per-server result aggregation. Tested
   with an in-process SSH server (real transport: pinning, key auth, exec, SFTP)
   plus fake-connection orchestration tests; race-clean.
-- **P3 — UI flow (done):** record-table editor (add/delete) plus a raw-text
-  editor writing to drafts, draft-vs-live diff, validate, deploy with per-server
-  results, history/rollback, and a servers page — all behind login + CSRF,
-  server-rendered with htmx. (Inline record editing and live-streaming deploy
-  progress are future niceties; edits today go via delete+add or the raw editor.)
+- **P3 — UI flow (done):** record-table editor with inline add/edit/delete
+  (htmx), a raw-text editor as an advanced escape hatch, draft-vs-live diff,
+  validate, deploy with per-server results, history/rollback, and a servers
+  page — all behind login + CSRF, server-rendered with htmx. (Live-streaming
+  deploy progress via SSE is a remaining nicety; deploy is currently
+  synchronous with a result page.)
 - **P4 — hardening/ops (done):** append-only JSONL audit log; Prometheus
   `/metrics`; per-IP login rate limiting; Makefile + a dev config; and a manual
   docker-compose BIND+sshd e2e target (`deploy/e2e`, not CI-verified).
