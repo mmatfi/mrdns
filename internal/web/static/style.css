@@ -218,6 +218,7 @@ pre.diff.removed { background: var(--badbg); color: #f6c2c2; border: 1px solid c
 .nav a svg { width: 16px; height: 16px; }
 
 .pagehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hbtns { display: flex; gap: 8px; }
 .zoneform { padding: 20px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; }

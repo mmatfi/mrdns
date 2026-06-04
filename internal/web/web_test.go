@@ -227,6 +227,33 @@ func TestDeployInvokesDeployerAndPublishes(t *testing.T) {
 	}
 }
 
+func TestImportZoneUI(t *testing.T) {
+	srv, st, _ := newTestServer(t)
+	content := "$ORIGIN new.example.\n$TTL 3600\n" +
+		"@ IN SOA ns1.new.example. host.new.example. 2026010101 7200 3600 1209600 3600\n" +
+		"@ IN NS ns1.new.example.\nwww IN A 192.0.2.7\n"
+	form := url.Values{"name": {"new.example"}, "content": {content}, "targets": {"ns1"}}
+	rec := do(srv, authed(t, srv, "POST", "/zones/import", form))
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/zones/new.example") {
+		t.Fatalf("import: %d -> %q", rec.Code, rec.Header().Get("Location"))
+	}
+	if ok, _ := st.ZoneExists("new.example"); !ok {
+		t.Error("imported zone is missing from the store")
+	}
+	if recs, _ := st.Records("new.example"); len(recs) != 2 {
+		t.Errorf("imported records = %d, want 2", len(recs))
+	}
+}
+
+func TestImportInvalidUI(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	form := url.Values{"name": {"bad.example"}, "content": {"this is not a zone file"}, "targets": {"ns1"}}
+	rec := do(srv, authed(t, srv, "POST", "/zones/import", form))
+	if rec.Code != http.StatusOK || !strings.Contains(strings.ToLower(rec.Body.String()), "parse") {
+		t.Fatalf("expected a re-rendered form with a parse error; got %d", rec.Code)
+	}
+}
+
 func TestUnknownZone404(t *testing.T) {
 	srv, _, _ := newTestServer(t)
 	if rec := do(srv, authed(t, srv, "GET", "/zones/nope.example", nil)); rec.Code != http.StatusNotFound {

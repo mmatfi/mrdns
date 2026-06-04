@@ -214,6 +214,56 @@ func (s *Store) DeleteZone(name string) error {
 	return notFoundIfNoRows(res, err)
 }
 
+// ImportZone parses BIND zone file content and creates a new zone — its SOA
+// settings become the zone settings and the remaining records are imported.
+// It fails if a zone with that name already exists. Returns the record count.
+func (s *Store) ImportZone(name string, content []byte, targets []string) (int, error) {
+	if ok, err := s.ZoneExists(name); err != nil {
+		return 0, err
+	} else if ok {
+		return 0, fmt.Errorf("zone %q already exists", name)
+	}
+	z, err := zone.Parse(content, name)
+	if err != nil {
+		return 0, fmt.Errorf("parse zone: %w", err)
+	}
+	soa, err := z.SOA()
+	if err != nil {
+		return 0, err
+	}
+	recs := z.DataRecords()
+
+	zr := Zone{
+		Name: name, PrimaryNS: soa.PrimaryNS, Mbox: soa.Mbox,
+		Refresh: soa.Refresh, Retry: soa.Retry, Expire: soa.Expire, Minimum: soa.Minimum,
+		TTL: soa.TTL, Serial: soa.Serial, Targets: targets,
+	}
+	zr.applyDefaults()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
+		`INSERT INTO zones(name,primary_ns,mbox,refresh,retry,expire,minimum,ttl,serial,targets,created_at)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		zr.Name, zr.PrimaryNS, zr.Mbox, zr.Refresh, zr.Retry, zr.Expire, zr.Minimum, zr.TTL, zr.Serial,
+		joinTargets(zr.Targets), time.Now().UTC().Format(time.RFC3339)); err != nil {
+		return 0, err
+	}
+	for _, r := range recs {
+		if _, err := tx.Exec(`INSERT INTO records(zone,name,ttl,type,data) VALUES(?,?,?,?,?)`,
+			name, r.Name, r.TTL, r.Type, r.Data); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return len(recs), nil
+}
+
 // ── records ──────────────────────────────────────────────────────────────
 
 func (s *Store) Records(zoneName string) ([]Record, error) {

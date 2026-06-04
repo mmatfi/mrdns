@@ -64,6 +64,7 @@ until deploy; the generated file is `<zone>.zone` in each server's
 /login  /logout
 /                              dashboard (zone cards)
 /zones/new   POST /zones       create a zone
+/zones/import  POST /zones/import   import a BIND zone file (also: `mrdns import` CLI)
 /zones/{zone}                  editor (inline records)
 /zones/{zone}/settings         SOA + targets (GET/POST)    POST /zones/{zone}/delete
 /zones/{zone}/records          GET fragment · POST add

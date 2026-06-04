@@ -55,6 +55,20 @@ sudo systemctl enable --now mrdns
 
 `/metrics` exposes Prometheus counters; the audit trail is JSONL at `audit_log`.
 
+## Importing existing zone files
+
+Migrate existing BIND zones into the database — either in the UI ("Import" on
+the dashboard, paste a zone file) or with the CLI:
+
+```sh
+mrdns import -config /opt/mrdns/etc/mrdns.yaml -targets ns1,ns2 \
+    example.com /etc/bind/zones/example.com.zone
+```
+
+The zone's SOA becomes its settings and the records are imported; it then
+behaves like any other zone (edit, diff, deploy). Import fails if the zone
+already exists. The CLI does not need the running server or the auth token.
+
 ## Target server prerequisites
 
 Each nameserver needs the `mrdns-deploy` user, the service's SSH public key in

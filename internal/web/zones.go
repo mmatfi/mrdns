@@ -2,7 +2,9 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -110,6 +112,35 @@ func (srv *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 	}
 	srv.audit.Log(audit.Event{Action: "zone_create", Actor: clientIP(r), Zone: z.Name})
 	http.Redirect(w, r, "/zones/"+z.Name+"?flash=Zone+created", http.StatusSeeOther)
+}
+
+func (srv *Server) handleImportForm(w http.ResponseWriter, r *http.Request) {
+	srv.render(w, "import.html", srv.pageData(r, "Import zone", map[string]any{
+		"Servers": srv.serverChoices(nil),
+	}))
+}
+
+func (srv *Server) handleImport(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	name := strings.TrimSpace(r.PostFormValue("name"))
+	content := r.PostFormValue("content")
+	targets := srv.formTargets(r)
+	reErr := func(msg string) {
+		srv.render(w, "import.html", srv.pageData(r, "Import zone", map[string]any{
+			"Servers": srv.serverChoices(targets), "Name": name, "Content": content, "Error": msg,
+		}))
+	}
+	if name == "" || strings.TrimSpace(content) == "" {
+		reErr("zone name and file content are required")
+		return
+	}
+	n, err := srv.store.ImportZone(name, []byte(content), targets)
+	if err != nil {
+		reErr(err.Error())
+		return
+	}
+	srv.audit.Log(audit.Event{Action: "zone_import", Actor: clientIP(r), Zone: name, Detail: fmt.Sprintf("%d records", n)})
+	http.Redirect(w, r, "/zones/"+name+"?flash="+url.QueryEscape(fmt.Sprintf("Imported %d records", n)), http.StatusSeeOther)
 }
 
 func (srv *Server) handleSettingsForm(w http.ResponseWriter, r *http.Request) {

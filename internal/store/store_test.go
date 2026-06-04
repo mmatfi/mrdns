@@ -145,6 +145,53 @@ func TestPublishDirtyRestore(t *testing.T) {
 	}
 }
 
+const importSample = `$ORIGIN example.com.
+$TTL 3600
+@ IN SOA ns1.example.com. hostmaster.example.com. 2026010101 7200 3600 1209600 3600
+@ IN NS ns1.example.com.
+@ IN A 192.0.2.1
+www IN A 192.0.2.2
+@ IN MX 10 mail.example.com.
+`
+
+func TestImportZone(t *testing.T) {
+	s := openTest(t)
+
+	n, err := s.ImportZone("example.com", []byte(importSample), []string{"ns1"})
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if n != 4 { // NS + A + A + MX (SOA excluded)
+		t.Fatalf("imported records = %d, want 4", n)
+	}
+	z, err := s.GetZone("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if z.Serial != 2026010101 {
+		t.Errorf("serial = %d, want 2026010101", z.Serial)
+	}
+	if z.PrimaryNS != "ns1.example.com." {
+		t.Errorf("primary_ns = %q", z.PrimaryNS)
+	}
+	if len(z.Targets) != 1 || z.Targets[0] != "ns1" {
+		t.Errorf("targets = %v", z.Targets)
+	}
+	if recs, _ := s.Records("example.com"); len(recs) != 4 {
+		t.Fatalf("stored records = %d, want 4", len(recs))
+	}
+	if _, err := s.Build("example.com"); err != nil {
+		t.Fatalf("build after import: %v", err)
+	}
+
+	if _, err := s.ImportZone("example.com", []byte(importSample), nil); err == nil {
+		t.Error("re-importing an existing zone should fail")
+	}
+	if _, err := s.ImportZone("bad.example", []byte("not a zone file"), nil); err == nil {
+		t.Error("importing invalid content should fail")
+	}
+}
+
 func TestSnapshotPruneKeep(t *testing.T) {
 	s := openTest(t) // keep = 3
 	seedZone(t, s)

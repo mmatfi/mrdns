@@ -60,6 +60,20 @@ type Server struct {
 
 // Load reads, parses, resolves secrets for, and validates the config file.
 func Load(path string) (*Config, error) {
+	cfg, err := LoadNoSecrets(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.resolveSecrets(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// LoadNoSecrets loads and validates the config without resolving the
+// environment secrets. It is for CLI tools that only need the paths and
+// servers, not the web auth token or cookie key.
+func LoadNoSecrets(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -69,9 +83,6 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	cfg.applyDefaults()
-	if err := cfg.resolveSecrets(); err != nil {
-		return nil, err
-	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}

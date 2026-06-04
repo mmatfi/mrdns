@@ -103,6 +103,8 @@ func (srv *Server) Handler() http.Handler {
 
 	mux.Handle("GET /zones/new", auth(srv.handleNewZoneForm))
 	mux.Handle("POST /zones", auth(srv.handleCreateZone))
+	mux.Handle("GET /zones/import", auth(srv.handleImportForm))
+	mux.Handle("POST /zones/import", auth(srv.handleImport))
 	mux.Handle("GET /zones/{zone}", auth(srv.handleEditor))
 	mux.Handle("GET /zones/{zone}/settings", auth(srv.handleSettingsForm))
 	mux.Handle("POST /zones/{zone}/settings", auth(srv.handleUpdateSettings))

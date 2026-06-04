@@ -1,0 +1,21 @@
+{{template "head" .}}
+<p class="crumb"><a href="/">{{template "ic_back" .}} Zones</a></p>
+<h1>Import zone</h1>
+<p class="muted">Paste a BIND zone file. Its SOA becomes the zone settings; the records are imported into the database.</p>
+{{if .Error}}<div class="opbox bad">{{.Error}}</div>{{end}}
+<form action="/zones/import" method="post" class="zoneform panel">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <div class="field"><label>Zone name</label><input name="name" value="{{.Name}}" placeholder="example.com" autofocus required></div>
+  <div class="field"><label>Zone file</label><textarea name="content" rows="16" spellcheck="false" placeholder="$ORIGIN example.com.&#10;@ IN SOA ns1.example.com. hostmaster.example.com. ( ... )">{{.Content}}</textarea></div>
+  <div class="field">
+    <label>Target servers</label>
+    <div class="choices">
+      {{range .Servers}}<label class="choice"><input type="checkbox" name="targets" value="{{.Name}}"{{if .Checked}} checked{{end}}> {{.Name}}</label>{{else}}<span class="muted">No servers configured.</span>{{end}}
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn primary">{{template "ic_check" .}} <span>Import</span></button>
+    <a class="btn ghost" href="/">Cancel</a>
+  </div>
+</form>
+{{template "foot" .}}
