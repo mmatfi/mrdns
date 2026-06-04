@@ -1,24 +1,25 @@
-# mrdns configuration.
-# Installed location: /opt/mrdns/etc/mrdns.yaml
+# mrdns configuration. Installed at /opt/mrdns/etc/mrdns.yaml
+#
+# Zones and records live in the SQLite database (data_dir/mrdns.db) and are
+# managed entirely in the web UI — they are NOT configured here.
 
 listen: "127.0.0.1:8080"        # bind locally; put behind a TLS reverse proxy
 secure_cookies: false           # set true once the UI is served over HTTPS
 
-zones_dir: /opt/mrdns/var       # holds live/ drafts/ backups/ log/
+data_dir: /opt/mrdns/var        # holds mrdns.db
 audit_log: /opt/mrdns/var/log/audit.jsonl
 
-# Secrets are read from the environment, never from this file.
-# See deploy/mrdns.env.example.
+# Secrets are read from the environment (see deploy/mrdns.env.example).
 auth_token_env: MRDNS_TOKEN
 cookie_key_env: MRDNS_COOKIE_KEY
 
-# SOA serial bump policy on deploy: date (YYYYMMDDnn) | unixtime | increment
-serial_policy: date
-backup_keep: 20                 # versions of each zone retained under var/backups
+serial_policy: date             # date (YYYYMMDDnn) | unixtime | increment
+backup_keep: 20                 # deploy snapshots retained per zone
 
-# Target BIND nameservers, reached over SSH. The deploy user needs write
-# access to remote_zone_dir (via a staging file) and a scoped sudo rule for
-# rndc (see deploy/sudoers.example). {zone} is substituted in reload_cmd.
+# Target BIND nameservers reached over SSH. The deploy user needs write access
+# to remote_zone_dir and a scoped sudo rule for rndc (deploy/sudoers.example).
+# {zone} is substituted in reload_cmd. The remote zone file is "<zone>.zone" in
+# remote_zone_dir — point each server's named.conf at that path.
 servers:
   ns1:
     host: ns1.example.net
@@ -35,16 +36,4 @@ servers:
     ssh_key: /opt/mrdns/etc/id_ed25519
     known_hosts: /opt/mrdns/etc/known_hosts
     remote_zone_dir: /etc/bind/zones
-    checkzone_cmd: /usr/sbin/named-checkzone
     reload_cmd: "sudo /usr/sbin/rndc reload {zone}"
-
-# Zones managed by the service. Each maps to a file under zones_dir and a set
-# of target servers. The zones must already be declared in each server's
-# named.conf (managing named.conf is out of scope).
-zones:
-  example.com:
-    file: example.com.zone
-    targets: [ns1, ns2]
-  0.168.192.in-addr.arpa:
-    file: rev-192-168-0.zone
-    targets: [ns1]

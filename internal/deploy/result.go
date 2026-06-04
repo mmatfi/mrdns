@@ -40,3 +40,17 @@ type ServerResult struct {
 	Output   string
 	Err      string
 }
+
+// AllMoved reports whether the content reached every target (so the caller can
+// safely record it as the new published state).
+func (r *Result) AllMoved() bool {
+	if len(r.Servers) == 0 {
+		return false
+	}
+	for i := range r.Servers {
+		if !r.Servers[i].Moved {
+			return false
+		}
+	}
+	return true
+}

@@ -16,9 +16,7 @@ id -u "${SVC_USER}" >/dev/null 2>&1 || \
 
 echo ">> creating layout under ${PREFIX}"
 install -d -m 0755 "${PREFIX}/bin" "${PREFIX}/etc"
-install -d -o "${SVC_USER}" -g "${SVC_GROUP}" -m 0750 \
-  "${PREFIX}/var" "${PREFIX}/var/live" "${PREFIX}/var/drafts" \
-  "${PREFIX}/var/backups" "${PREFIX}/var/log" "${PREFIX}/var/locks"
+install -d -o "${SVC_USER}" -g "${SVC_GROUP}" -m 0750 "${PREFIX}/var" "${PREFIX}/var/log"
 
 echo ">> installing binary"
 install -m 0755 ./dist/mrdns "${PREFIX}/bin/mrdns"
@@ -31,14 +29,20 @@ echo ">> installing systemd unit"
 install -m 0644 deploy/mrdns.service /etc/systemd/system/mrdns.service
 systemctl daemon-reload
 
+# On an upgrade, restart the running service so the new binary takes effect.
+echo ">> restarting service if already running"
+systemctl try-restart mrdns.service || true
+
 cat <<EOF
 
 Done. Next steps:
   1. Edit ${PREFIX}/etc/mrdns.env and set strong secrets:
        MRDNS_TOKEN=\$(openssl rand -hex 32)
        MRDNS_COOKIE_KEY=\$(openssl rand -hex 32)
-  2. Edit ${PREFIX}/etc/mrdns.yaml (servers, zones).
+  2. Edit ${PREFIX}/etc/mrdns.yaml (servers + settings).
   3. Place the SSH key and known_hosts in ${PREFIX}/etc/.
-  4. Start it:
+  4. Start it (first install):
        systemctl enable --now mrdns
+  Zones are created in the web UI, not in the config file.
+  (An already-running service was restarted automatically above.)
 EOF

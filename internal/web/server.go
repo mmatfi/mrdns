@@ -1,7 +1,8 @@
 // Package web serves the mrdns user interface. The HTTP surface is UI-only:
-// server-rendered HTML pages plus htmx fragment endpoints. There is no JSON
-// API. Authentication is a single access token exchanged at /login for a
-// signed session cookie; state-changing requests are CSRF-protected.
+// server-rendered HTML pages plus htmx fragment endpoints. Zones and records
+// are edited as structured data in the SQLite store; BIND zone files are
+// generated only at deploy time. Authentication is a single access token
+// exchanged at /login for a signed session cookie; mutations are CSRF-protected.
 package web
 
 import (
@@ -26,10 +27,10 @@ var templatesFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-// Deployer validates and rolls a zone out to its targets. Implemented by
+// Deployer rolls a prepared deploy request out to its targets. Implemented by
 // *deploy.Pipeline; an interface so the web layer is testable without SSH.
 type Deployer interface {
-	Deploy(ctx context.Context, zoneName string) (*deploy.Result, error)
+	Deploy(ctx context.Context, req deploy.Request) (*deploy.Result, error)
 }
 
 // Deps are the dependencies for the web server.
@@ -99,15 +100,21 @@ func (srv *Server) Handler() http.Handler {
 	auth := func(h http.HandlerFunc) http.Handler { return srv.requireAuth(h) }
 	mux.Handle("GET /{$}", auth(srv.handleDashboard))
 	mux.Handle("GET /servers", auth(srv.handleServers))
+
+	mux.Handle("GET /zones/new", auth(srv.handleNewZoneForm))
+	mux.Handle("POST /zones", auth(srv.handleCreateZone))
 	mux.Handle("GET /zones/{zone}", auth(srv.handleEditor))
-	mux.Handle("GET /zones/{zone}/raw", auth(srv.handleRawForm))
-	mux.Handle("POST /zones/{zone}/raw", auth(srv.handleRawSave))
-	mux.Handle("POST /zones/{zone}/records", auth(srv.handleAddRecord))
+	mux.Handle("GET /zones/{zone}/settings", auth(srv.handleSettingsForm))
+	mux.Handle("POST /zones/{zone}/settings", auth(srv.handleUpdateSettings))
+	mux.Handle("POST /zones/{zone}/delete", auth(srv.handleDeleteZone))
+
 	mux.Handle("GET /zones/{zone}/records", auth(srv.handleRecordsFragment))
 	mux.Handle("GET /zones/{zone}/records/edit", auth(srv.handleEditRecordForm))
+	mux.Handle("POST /zones/{zone}/records", auth(srv.handleAddRecord))
 	mux.Handle("POST /zones/{zone}/records/update", auth(srv.handleUpdateRecord))
 	mux.Handle("POST /zones/{zone}/records/delete", auth(srv.handleDeleteRecord))
-	mux.Handle("POST /zones/{zone}/discard", auth(srv.handleDiscard))
+
+	mux.Handle("GET /zones/{zone}/preview", auth(srv.handlePreview))
 	mux.Handle("GET /zones/{zone}/diff", auth(srv.handleDiff))
 	mux.Handle("POST /zones/{zone}/validate", auth(srv.handleValidate))
 	mux.Handle("POST /zones/{zone}/deploy", auth(srv.handleDeploy))

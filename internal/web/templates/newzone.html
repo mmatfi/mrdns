@@ -1,0 +1,30 @@
+{{template "head" .}}
+<p class="crumb"><a href="/">{{template "ic_back" .}} Zones</a></p>
+<h1>New zone</h1>
+{{if .Error}}<div class="opbox bad">{{.Error}}</div>{{end}}
+<form action="/zones" method="post" class="zoneform panel">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <div class="field"><label>Zone name</label><input name="name" value="{{.Z.Name}}" placeholder="example.com" autofocus required></div>
+  <div class="grid2">
+    <div class="field"><label>Primary nameserver</label><input name="primary_ns" value="{{.Z.PrimaryNS}}" placeholder="ns1.example.com" required></div>
+    <div class="field"><label>Admin email</label><input name="mbox" value="{{.Z.Mbox}}" placeholder="hostmaster@example.com" required></div>
+  </div>
+  <div class="grid4">
+    <div class="field"><label>TTL</label><input name="ttl" value="{{.Z.TTL}}"></div>
+    <div class="field"><label>Refresh</label><input name="refresh" value="{{.Z.Refresh}}"></div>
+    <div class="field"><label>Retry</label><input name="retry" value="{{.Z.Retry}}"></div>
+    <div class="field"><label>Expire</label><input name="expire" value="{{.Z.Expire}}"></div>
+    <div class="field"><label>Minimum</label><input name="minimum" value="{{.Z.Minimum}}"></div>
+  </div>
+  <div class="field">
+    <label>Target servers</label>
+    <div class="choices">
+      {{range .Servers}}<label class="choice"><input type="checkbox" name="targets" value="{{.Name}}"{{if .Checked}} checked{{end}}> {{.Name}}</label>{{else}}<span class="muted">No servers configured in mrdns.yaml.</span>{{end}}
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn primary">{{template "ic_check" .}} <span>Create zone</span></button>
+    <a class="btn ghost" href="/">Cancel</a>
+  </div>
+</form>
+{{template "foot" .}}

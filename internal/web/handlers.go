@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/mmatfi/mrdns/internal/audit"
-	"github.com/mmatfi/mrdns/internal/zone"
 )
 
 func (srv *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +23,6 @@ func (srv *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	// Establish a pre-auth session so the login form carries a CSRF token.
 	if !ok {
 		s = newSession(false)
 		srv.setSession(w, s)
@@ -62,18 +60,9 @@ func (srv *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?error=Invalid+access+token", http.StatusSeeOther)
 		return
 	}
-	// Issue a fresh authenticated session (new CSRF) to prevent fixation.
 	srv.setSession(w, newSession(true))
 	srv.audit.Log(audit.Event{Action: "login", Actor: ip})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-// clientIP returns the source IP of a request, without the port.
-func clientIP(r *http.Request) string {
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
-	}
-	return r.RemoteAddr
 }
 
 func (srv *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -83,43 +72,38 @@ func (srv *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (srv *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	type zoneCard struct {
-		Name     string
-		Serial   uint32
-		Records  int
-		HasDraft bool
-		OK       bool
-		Note     string
-		Targets  []string
+		Name    string
+		Serial  uint32
+		Records int
+		Dirty   bool
+		Targets []string
 	}
-	cards := make([]zoneCard, 0, len(srv.cfg.Zones))
-	drafts := 0
-	for name, zc := range srv.cfg.Zones {
-		c := zoneCard{Name: name, Targets: zc.Targets, HasDraft: srv.store.HasDraft(zc.File)}
-		if c.HasDraft {
-			drafts++
-		}
-		content, _, err := srv.currentContent(zc)
-		if err != nil {
-			c.Note = "no zone file"
-		} else if z, perr := zone.Parse(content, name); perr != nil {
-			c.Note = "does not parse"
-		} else {
-			c.OK = true
-			c.Serial, _ = z.Serial()
-			c.Records = z.Len()
-		}
-		cards = append(cards, c)
+	zones, err := srv.store.ListZones()
+	if err != nil {
+		srv.log.Error("list zones", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
-	sort.Slice(cards, func(i, j int) bool { return cards[i].Name < cards[j].Name })
+	cards := make([]zoneCard, 0, len(zones))
+	dirtyCount := 0
+	for _, z := range zones {
+		recs, _ := srv.store.Records(z.Name)
+		dirty, _ := srv.store.Dirty(z.Name)
+		if dirty {
+			dirtyCount++
+		}
+		cards = append(cards, zoneCard{Name: z.Name, Serial: z.Serial, Records: len(recs), Dirty: dirty, Targets: z.Targets})
+	}
 
-	type serverCard struct {
+	type serverRow struct {
 		Name, Host, User string
 		Port, Zones      int
 	}
-	servers := make([]serverCard, 0, len(srv.cfg.Servers))
-	for name, sv := range srv.cfg.Servers {
+	servers := make([]serverRow, 0, len(srv.cfg.Servers))
+	for _, name := range srv.cfg.ServerNames() {
+		sv := srv.cfg.Servers[name]
 		used := 0
-		for _, z := range srv.cfg.Zones {
+		for _, z := range zones {
 			for _, t := range z.Targets {
 				if t == name {
 					used++
@@ -130,37 +114,40 @@ func (srv *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		if port == 0 {
 			port = 22
 		}
-		servers = append(servers, serverCard{Name: name, Host: sv.Host, User: sv.User, Port: port, Zones: used})
+		servers = append(servers, serverRow{Name: name, Host: sv.Host, User: sv.User, Port: port, Zones: used})
 	}
-	sort.Slice(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
 
 	srv.render(w, "dashboard.html", srv.pageData(r, "Zones", map[string]any{
 		"Cards": cards, "Servers": servers,
-		"NumZones": len(cards), "NumServers": len(servers), "NumDrafts": drafts,
+		"NumZones": len(cards), "NumServers": len(servers), "NumDirty": dirtyCount,
 	}))
 }
 
 func (srv *Server) handleServers(w http.ResponseWriter, r *http.Request) {
+	zones, _ := srv.store.ListZones()
 	type row struct {
 		Name, Host, User, RemoteDir string
 		Port                        int
 		Zones                       []string
 	}
 	rows := make([]row, 0, len(srv.cfg.Servers))
-	for name, sv := range srv.cfg.Servers {
-		var zones []string
-		for zn, zc := range srv.cfg.Zones {
-			for _, t := range zc.Targets {
+	for _, name := range srv.cfg.ServerNames() {
+		sv := srv.cfg.Servers[name]
+		var zs []string
+		for _, z := range zones {
+			for _, t := range z.Targets {
 				if t == name {
-					zones = append(zones, zn)
+					zs = append(zs, z.Name)
 				}
 			}
 		}
-		sort.Strings(zones)
-		rows = append(rows, row{Name: name, Host: sv.Host, User: sv.User, RemoteDir: sv.RemoteZoneDir, Port: sv.Port, Zones: zones})
+		sort.Strings(zs)
+		port := sv.Port
+		if port == 0 {
+			port = 22
+		}
+		rows = append(rows, row{Name: name, Host: sv.Host, User: sv.User, RemoteDir: sv.RemoteZoneDir, Port: port, Zones: zs})
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
-
 	srv.render(w, "servers.html", srv.pageData(r, "Servers", map[string]any{"Servers": rows}))
 }
 
@@ -193,4 +180,12 @@ func csrfOf(s *session) string {
 		return ""
 	}
 	return s.CSRF
+}
+
+// clientIP returns the source IP of a request, without the port.
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }

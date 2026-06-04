@@ -12,9 +12,7 @@
         <td><input name="type" value="{{.Type}}" size="7" list="rtypes" aria-label="type"></td>
         <td><input name="data" value="{{.Data}}" aria-label="data"></td>
         <td class="rowactions">
-          <input type="hidden" name="old_name" value="{{.Name}}">
-          <input type="hidden" name="old_type" value="{{.Type}}">
-          <input type="hidden" name="old_data" value="{{.Data}}">
+          <input type="hidden" name="id" value="{{.ID}}">
           <button type="button" class="link" hx-post="/zones/{{$.Zone}}/records/update" hx-include="closest tr" hx-target="#records" hx-swap="outerHTML">{{template "ic_check" $}} save</button>
           <button type="button" class="link" hx-get="/zones/{{$.Zone}}/records" hx-target="#records" hx-swap="outerHTML">cancel</button>
         </td>
@@ -26,13 +24,9 @@
         <td><span class="type type-{{.Type}}">{{.Type}}</span></td>
         <td><code>{{.Data}}</code></td>
         <td class="rowactions">
-        {{if .Managed}}<span class="chip">SOA · managed</span>{{else}}
-          <input type="hidden" name="name" value="{{.Name}}">
-          <input type="hidden" name="type" value="{{.Type}}">
-          <input type="hidden" name="data" value="{{.Data}}">
-          <button type="button" class="link" hx-get="/zones/{{$.Zone}}/records/edit" hx-include="closest tr" hx-target="#records" hx-swap="outerHTML">{{template "ic_edit" $}} edit</button>
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="button" class="link" hx-get="/zones/{{$.Zone}}/records/edit?id={{.ID}}" hx-target="#records" hx-swap="outerHTML">{{template "ic_edit" $}} edit</button>
           <button type="button" class="link danger" hx-post="/zones/{{$.Zone}}/records/delete" hx-include="closest tr" hx-target="#records" hx-swap="outerHTML" aria-label="delete">{{template "ic_trash" $}}</button>
-        {{end}}
         </td>
       </tr>
       {{end}}
@@ -40,13 +34,12 @@
     </tbody>
   </table>
 
-  <form class="addrow" action="/zones/{{.Zone}}/records" method="post" hx-post="/zones/{{.Zone}}/records" hx-target="#records" hx-swap="outerHTML">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <form class="addrow" hx-post="/zones/{{.Zone}}/records" hx-target="#records" hx-swap="outerHTML">
     <input name="name" placeholder="name (www or @)" required>
     <input name="ttl" value="3600" size="6" aria-label="TTL">
     <input name="type" placeholder="type" list="rtypes" size="7" required>
     <input name="data" placeholder="data (e.g. 192.0.2.10)" required>
-    <button type="submit" class="btn primary">{{template "ic_plus" .}} <span>Add record</span></button>
+    <button type="submit" class="btn primary">{{template "ic_plus" .}} <span>Add</span></button>
   </form>
   <datalist id="rtypes">
     <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option>

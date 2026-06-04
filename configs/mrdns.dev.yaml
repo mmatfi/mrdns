@@ -1,9 +1,10 @@
-# Local development config. State is written under ./.dev (git-ignored).
-# Run with: make run   (or see the MRDNS_TOKEN / MRDNS_COOKIE_KEY env vars).
+# Local development config. State (mrdns.db, audit log) is written under ./.dev
+# (git-ignored). Run with: make run
+# Create zones in the UI — there are none to configure here.
 listen: "127.0.0.1:8080"
 secure_cookies: false
-zones_dir: ./.dev/var
-audit_log: ./.dev/var/log/audit.jsonl
+data_dir: ./.dev
+audit_log: ./.dev/log/audit.jsonl
 serial_policy: date
 backup_keep: 10
 
@@ -17,8 +18,3 @@ servers:
     remote_zone_dir: /etc/bind/zones
     checkzone_cmd: /usr/sbin/named-checkzone
     reload_cmd: "sudo /usr/sbin/rndc reload {zone}"
-
-zones:
-  example.com:
-    file: example.com.zone
-    targets: [local]

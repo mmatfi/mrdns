@@ -1,0 +1,29 @@
+{{template "head" .}}
+<p class="crumb"><a href="/zones/{{.Z.Name}}">{{template "ic_back" .}} {{.Z.Name}}</a></p>
+<h1>Settings — {{.Z.Name}}</h1>
+{{if .Error}}<div class="opbox bad">{{.Error}}</div>{{end}}
+<form action="/zones/{{.Z.Name}}/settings" method="post" class="zoneform panel">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <div class="grid2">
+    <div class="field"><label>Primary nameserver</label><input name="primary_ns" value="{{.Z.PrimaryNS}}" required></div>
+    <div class="field"><label>Admin email</label><input name="mbox" value="{{.Z.Mbox}}" required></div>
+  </div>
+  <div class="grid4">
+    <div class="field"><label>TTL</label><input name="ttl" value="{{.Z.TTL}}"></div>
+    <div class="field"><label>Refresh</label><input name="refresh" value="{{.Z.Refresh}}"></div>
+    <div class="field"><label>Retry</label><input name="retry" value="{{.Z.Retry}}"></div>
+    <div class="field"><label>Expire</label><input name="expire" value="{{.Z.Expire}}"></div>
+    <div class="field"><label>Minimum</label><input name="minimum" value="{{.Z.Minimum}}"></div>
+  </div>
+  <div class="field">
+    <label>Target servers</label>
+    <div class="choices">
+      {{range .Servers}}<label class="choice"><input type="checkbox" name="targets" value="{{.Name}}"{{if .Checked}} checked{{end}}> {{.Name}}</label>{{else}}<span class="muted">No servers configured.</span>{{end}}
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn primary">{{template "ic_check" .}} <span>Save settings</span></button>
+    <a class="btn ghost" href="/zones/{{.Z.Name}}">Cancel</a>
+  </div>
+</form>
+{{template "foot" .}}

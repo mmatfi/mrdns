@@ -217,7 +217,17 @@ pre.diff.removed { background: var(--badbg); color: #f6c2c2; border: 1px solid c
 .card.login .logo svg { width: 40px; height: 40px; color: var(--brand-2); }
 .nav a svg { width: 16px; height: 16px; }
 
+.pagehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.zoneform { padding: 20px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; }
+.choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.choice { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--bg-2); cursor: pointer; }
+.choice input { width: auto; }
+.codeblock { padding: 14px 16px; border-radius: var(--radius-sm); background: var(--bg-2); border: 1px solid var(--line); overflow-x: auto; line-height: 1.5; white-space: pre; }
+
 @media (max-width: 620px) {
+  .grid2 { grid-template-columns: 1fr; }
   .nav a span { display: none; }
   .actions .btn span { display: none; }
   table.grid th:nth-child(2), table.grid td:nth-child(2) { display: none; }

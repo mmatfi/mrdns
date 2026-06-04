@@ -52,11 +52,15 @@ func run() error {
 	}
 	defer aud.Close()
 
-	st, err := store.New(cfg.LiveDir(), cfg.DraftDir(), cfg.BackupDir(), cfg.LockDir(), cfg.BackupKeep)
+	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
+		return err
+	}
+	st, err := store.Open(cfg.DBPath(), cfg.BackupKeep)
 	if err != nil {
 		return err
 	}
-	pipeline := deploy.New(cfg, st, logger)
+	defer st.Close()
+	pipeline := deploy.New(cfg, logger)
 
 	srv, err := web.New(web.Deps{
 		Config:   cfg,
@@ -84,7 +88,7 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("listening", "addr", cfg.Listen, "zones", len(cfg.Zones), "servers", len(cfg.Servers))
+		logger.Info("listening", "addr", cfg.Listen, "db", cfg.DBPath(), "servers", len(cfg.Servers))
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

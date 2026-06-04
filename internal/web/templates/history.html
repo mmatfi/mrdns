@@ -1,18 +1,18 @@
 {{template "head" .}}
 <p class="crumb"><a href="/zones/{{.Zone}}">{{template "ic_back" .}} {{.Zone}}</a></p>
 <h1>History — {{.Zone}}</h1>
-{{if .Backups}}
+{{if .Snapshots}}
 <div class="panel">
 <table class="grid">
-  <thead><tr><th>Backup</th><th>When</th><th>Bytes</th><th></th></tr></thead>
+  <thead><tr><th>Serial</th><th>Deployed</th><th>Bytes</th><th></th></tr></thead>
   <tbody>
-  {{range .Backups}}
+  {{range .Snapshots}}
     <tr>
-      <td><code>{{.ID}}</code></td>
+      <td>{{.Serial}}</td>
       <td>{{.When}}</td>
       <td>{{.Size}}</td>
       <td class="rowactions">
-        <form action="/zones/{{$.Zone}}/rollback" method="post" onsubmit="return confirm('Restore this version into the draft?')">
+        <form action="/zones/{{$.Zone}}/rollback" method="post" onsubmit="return confirm('Restore this version into the working copy?')">
           <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
           <input type="hidden" name="id" value="{{.ID}}">
           <button class="link">{{template "ic_undo" $}} restore</button>
@@ -24,6 +24,6 @@
 </table>
 </div>
 {{else}}
-<p class="muted">No backups yet. A backup is created each time a deploy promotes new content.</p>
+<p class="muted">No deploys yet. A snapshot is recorded each time you deploy.</p>
 {{end}}
 {{template "foot" .}}

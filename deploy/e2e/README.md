@@ -42,14 +42,10 @@ servers:
     remote_zone_dir: /etc/bind/zones
     checkzone_cmd: /usr/sbin/named-checkzone
     reload_cmd: "sudo /usr/sbin/rndc reload {zone}"
-zones:
-  example.com:
-    file: example.com.zone
-    targets: [e2e]
 ```
 
-Seed `live/example.com.zone` (copy this directory's `example.com.zone`), edit a
-record in the UI, deploy, and confirm the serial advanced:
+In the UI, create the `example.com` zone targeting `e2e`, add a record, deploy,
+and confirm the serial advanced:
 
 ```sh
 dig @127.0.0.1 -p 5353 SOA example.com +short

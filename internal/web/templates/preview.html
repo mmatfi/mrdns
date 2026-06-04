@@ -1,0 +1,6 @@
+{{template "head" .}}
+<p class="crumb"><a href="/zones/{{.Zone}}">{{template "ic_back" .}} {{.Zone}}</a></p>
+<h1>Generated zone file — {{.Zone}}</h1>
+<p class="muted">Read-only — this is what gets deployed. Edit records in the zone editor.</p>
+<pre class="codeblock">{{.Content}}</pre>
+{{template "foot" .}}

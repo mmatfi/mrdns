@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mmatfi/mrdns/internal/audit"
-	"github.com/mmatfi/mrdns/internal/config"
 	"github.com/mmatfi/mrdns/internal/deploy"
 	"github.com/mmatfi/mrdns/internal/store"
 	"github.com/mmatfi/mrdns/internal/zone"
@@ -16,387 +16,348 @@ import (
 
 // recordRow is a presentation row for the editor's record table.
 type recordRow struct {
+	ID                    int64
 	Name, TTL, Type, Data string
-	Managed               bool // SOA: shown read-only
-	Editing               bool // rendered as an inline edit form
+	Editing               bool
 }
 
-func recordRows(z *zone.Zone) []recordRow {
-	recs := z.Records()
-	rows := make([]recordRow, 0, len(recs))
-	for _, r := range recs {
-		rows = append(rows, recordRow{
-			Name:    r.Name,
-			TTL:     strconv.FormatUint(uint64(r.TTL), 10),
-			Type:    r.Type,
-			Data:    r.Data,
-			Managed: r.Type == "SOA",
-		})
+func recordRows(recs []store.Record) []recordRow {
+	rows := make([]recordRow, len(recs))
+	for i, r := range recs {
+		rows[i] = recordRow{
+			ID:   r.ID,
+			Name: r.Name,
+			TTL:  strconv.FormatUint(uint64(r.TTL), 10),
+			Type: r.Type,
+			Data: r.Data,
+		}
 	}
 	return rows
 }
 
-// markEditing flags the first row matching (name, rtype, data) for inline edit.
-func markEditing(rows []recordRow, name, rtype, data string) {
+func markEditing(rows []recordRow, id int64) {
 	for i := range rows {
-		if rows[i].Name == name && rows[i].Type == rtype && rows[i].Data == data {
+		if rows[i].ID == id {
 			rows[i].Editing = true
 			return
 		}
 	}
 }
 
-// zoneConfig resolves the zone from the path, writing a 404 if unknown.
-func (srv *Server) zoneConfig(w http.ResponseWriter, r *http.Request) (string, config.Zone, bool) {
-	name := r.PathValue("zone")
-	zc, ok := srv.cfg.Zones[name]
-	if !ok {
-		http.Error(w, "unknown zone", http.StatusNotFound)
-		return "", config.Zone{}, false
-	}
-	return name, zc, true
+type serverChoice struct {
+	Name    string
+	Checked bool
 }
 
-// currentContent returns the draft if present, otherwise the live content,
-// reporting whether the content came from a draft.
-func (srv *Server) currentContent(zc config.Zone) (content []byte, isDraft bool, err error) {
-	if srv.store.HasDraft(zc.File) {
-		b, err := srv.store.ReadDraft(zc.File)
-		return b, true, err
+func (srv *Server) serverChoices(selected []string) []serverChoice {
+	sel := map[string]bool{}
+	for _, s := range selected {
+		sel[s] = true
 	}
-	b, err := srv.store.ReadLive(zc.File)
-	return b, false, err
+	out := make([]serverChoice, 0, len(srv.cfg.Servers))
+	for _, n := range srv.cfg.ServerNames() {
+		out = append(out, serverChoice{Name: n, Checked: sel[n]})
+	}
+	return out
 }
+
+// ── new zone / settings ────────────────────────────────────────────────────
+
+func (srv *Server) handleNewZoneForm(w http.ResponseWriter, r *http.Request) {
+	z := store.Zone{TTL: 3600, Refresh: 7200, Retry: 3600, Expire: 1209600, Minimum: 3600}
+	srv.render(w, "newzone.html", srv.pageData(r, "New zone", map[string]any{
+		"Z": z, "Servers": srv.serverChoices(nil),
+	}))
+}
+
+func (srv *Server) zoneFromForm(r *http.Request) store.Zone {
+	_ = r.ParseForm()
+	return store.Zone{
+		Name:      strings.TrimSpace(r.PostFormValue("name")),
+		PrimaryNS: strings.TrimSpace(r.PostFormValue("primary_ns")),
+		Mbox:      strings.TrimSpace(r.PostFormValue("mbox")),
+		TTL:       formUint(r, "ttl", 3600),
+		Refresh:   formUint(r, "refresh", 7200),
+		Retry:     formUint(r, "retry", 3600),
+		Expire:    formUint(r, "expire", 1209600),
+		Minimum:   formUint(r, "minimum", 3600),
+		Targets:   srv.formTargets(r),
+	}
+}
+
+func (srv *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
+	z := srv.zoneFromForm(r)
+	reErr := func(msg string) {
+		srv.render(w, "newzone.html", srv.pageData(r, "New zone", map[string]any{
+			"Z": z, "Servers": srv.serverChoices(z.Targets), "Error": msg,
+		}))
+	}
+	if z.Name == "" || z.PrimaryNS == "" || z.Mbox == "" {
+		reErr("name, primary NS, and admin email are required")
+		return
+	}
+	if ok, _ := srv.store.ZoneExists(z.Name); ok {
+		reErr("a zone named " + z.Name + " already exists")
+		return
+	}
+	if _, err := zone.Build(z.Name, z.SOAData(), nil); err != nil {
+		reErr("invalid zone settings: " + err.Error())
+		return
+	}
+	if err := srv.store.CreateZone(z); err != nil {
+		reErr("create: " + err.Error())
+		return
+	}
+	srv.audit.Log(audit.Event{Action: "zone_create", Actor: clientIP(r), Zone: z.Name})
+	http.Redirect(w, r, "/zones/"+z.Name+"?flash=Zone+created", http.StatusSeeOther)
+}
+
+func (srv *Server) handleSettingsForm(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	z, err := srv.store.GetZone(name)
+	if !srv.zoneOK(w, err) {
+		return
+	}
+	srv.render(w, "settings.html", srv.pageData(r, "Settings "+name, map[string]any{
+		"Z": z, "Servers": srv.serverChoices(z.Targets),
+	}))
+}
+
+func (srv *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	z := srv.zoneFromForm(r)
+	z.Name = name
+	reErr := func(msg string) {
+		srv.render(w, "settings.html", srv.pageData(r, "Settings "+name, map[string]any{
+			"Z": z, "Servers": srv.serverChoices(z.Targets), "Error": msg,
+		}))
+	}
+	if z.PrimaryNS == "" || z.Mbox == "" {
+		reErr("primary NS and admin email are required")
+		return
+	}
+	if _, err := zone.Build(name, z.SOAData(), nil); err != nil {
+		reErr("invalid zone settings: " + err.Error())
+		return
+	}
+	if err := srv.store.UpdateZoneSettings(z); err != nil {
+		reErr("update: " + err.Error())
+		return
+	}
+	srv.audit.Log(audit.Event{Action: "zone_settings", Actor: clientIP(r), Zone: name})
+	http.Redirect(w, r, "/zones/"+name+"?flash=Settings+saved", http.StatusSeeOther)
+}
+
+func (srv *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	if err := srv.store.DeleteZone(name); err != nil && !errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "delete: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	srv.audit.Log(audit.Event{Action: "zone_delete", Actor: clientIP(r), Zone: name})
+	http.Redirect(w, r, "/?flash=Zone+deleted", http.StatusSeeOther)
+}
+
+// ── editor ──────────────────────────────────────────────────────────────────
 
 func (srv *Server) handleEditor(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
+	name := r.PathValue("zone")
+	z, err := srv.store.GetZone(name)
+	if !srv.zoneOK(w, err) {
 		return
 	}
-	content, isDraft, err := srv.currentContent(zc)
-	if err != nil {
-		srv.render(w, "editor.html", srv.pageData(r, name, map[string]any{
-			"Zone": name, "Targets": zc.Targets,
-			"LoadErr": "No zone file yet (" + err.Error() + "). Use the raw editor to create one.",
-		}))
-		return
-	}
-	z, perr := zone.Parse(content, name)
-	if perr != nil {
-		srv.render(w, "editor.html", srv.pageData(r, name, map[string]any{
-			"Zone": name, "Targets": zc.Targets, "IsDraft": isDraft,
-			"ParseErr": perr.Error(),
-		}))
-		return
-	}
-	serial, _ := z.Serial()
+	recs, _ := srv.store.Records(name)
+	dirty, _ := srv.store.Dirty(name)
+	_, published, _ := srv.store.LastSnapshot(name)
 	srv.render(w, "editor.html", srv.pageData(r, name, map[string]any{
-		"Zone": name, "Targets": zc.Targets, "IsDraft": isDraft,
-		"Serial": serial, "Records": recordRows(z),
+		"Zone": name, "Z": z, "Serial": z.Serial, "Targets": z.Targets,
+		"Records": recordRows(recs), "Dirty": dirty, "Published": published,
 		"Flash": r.URL.Query().Get("flash"),
 	}))
 }
 
-// renderRecordsFragment re-renders the records table partial (htmx target).
-func (srv *Server) renderRecordsFragment(w http.ResponseWriter, r *http.Request, zoneName string, rows []recordRow, recErr string) {
+func (srv *Server) renderRecords(w http.ResponseWriter, r *http.Request, zoneName string, rows []recordRow, recErr string) {
 	s, _ := srv.currentSession(r)
 	srv.render(w, "records", map[string]any{
 		"Zone": zoneName, "CSRF": csrfOf(s), "Records": rows, "RecErr": recErr,
 	})
 }
 
-func (srv *Server) handleAddRecord(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
+func (srv *Server) handleRecordsFragment(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	if ok, _ := srv.store.ZoneExists(name); !ok {
+		http.Error(w, "unknown zone", http.StatusNotFound)
 		return
 	}
-	_ = r.ParseForm()
-	rname := strings.TrimSpace(r.PostFormValue("name"))
-	ttl := strings.TrimSpace(r.PostFormValue("ttl"))
-	rtype := strings.ToUpper(strings.TrimSpace(r.PostFormValue("type")))
-	data := strings.TrimSpace(r.PostFormValue("data"))
+	recs, _ := srv.store.Records(name)
+	srv.renderRecords(w, r, name, recordRows(recs), "")
+}
 
-	content, _, err := srv.currentContent(zc)
+func (srv *Server) handleEditRecordForm(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+	recs, _ := srv.store.Records(name)
+	rows := recordRows(recs)
+	markEditing(rows, id)
+	srv.renderRecords(w, r, name, rows, "")
+}
+
+func (srv *Server) handleAddRecord(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	_ = r.ParseForm()
+	rec, err := zone.NormalizeRecord(name, r.PostFormValue("name"), formUint(r, "ttl", 3600), r.PostFormValue("type"), r.PostFormValue("data"))
 	if err != nil {
-		http.Error(w, "load zone: "+err.Error(), http.StatusInternalServerError)
+		recs, _ := srv.store.Records(name)
+		srv.renderRecords(w, r, name, recordRows(recs), err.Error())
 		return
 	}
-	z, err := zone.Parse(content, name)
-	if err != nil {
-		http.Error(w, "parse zone: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if rname == "" || rtype == "" || data == "" {
-		srv.renderRecordsFragment(w, r, name, recordRows(z), "name, type, and data are required")
-		return
-	}
-	if ttl == "" {
-		ttl = "3600"
-	}
-	line := rname + " " + ttl + " IN " + rtype + " " + data
-	if err := z.Add(line); err != nil {
-		srv.renderRecordsFragment(w, r, name, recordRows(z), err.Error())
-		return
-	}
-	if err := srv.store.WriteDraft(zc.File, z.Render()); err != nil {
-		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
+	if _, err := srv.store.AddRecord(name, rec); err != nil {
+		http.Error(w, "add record: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	srv.audit.Log(audit.Event{Action: "record_add", Actor: clientIP(r), Zone: name})
-	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
+	recs, _ := srv.store.Records(name)
+	srv.renderRecords(w, r, name, recordRows(recs), "")
 }
 
-func (srv *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return
-	}
-	_ = r.ParseForm()
-	content, _, err := srv.currentContent(zc)
-	if err != nil {
-		http.Error(w, "load zone: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	z, err := zone.Parse(content, name)
-	if err != nil {
-		http.Error(w, "parse zone: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	z.Remove(r.PostFormValue("name"), r.PostFormValue("type"), r.PostFormValue("data"))
-	if err := srv.store.WriteDraft(zc.File, z.Render()); err != nil {
-		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	srv.audit.Log(audit.Event{Action: "record_delete", Actor: clientIP(r), Zone: name})
-	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
-}
-
-// handleRecordsFragment returns the records table (used to refresh or to cancel
-// an inline edit).
-func (srv *Server) handleRecordsFragment(w http.ResponseWriter, r *http.Request) {
-	name, z, ok := srv.loadEditableZone(w, r)
-	if !ok {
-		return
-	}
-	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
-}
-
-// handleEditRecordForm returns the records table with one row switched to an
-// inline edit form.
-func (srv *Server) handleEditRecordForm(w http.ResponseWriter, r *http.Request) {
-	name, z, ok := srv.loadEditableZone(w, r)
-	if !ok {
-		return
-	}
-	q := r.URL.Query()
-	rows := recordRows(z)
-	markEditing(rows, q.Get("name"), q.Get("type"), q.Get("data"))
-	srv.renderRecordsFragment(w, r, name, rows, "")
-}
-
-// handleUpdateRecord replaces a record (identified by its old name/type/data)
-// with edited values, writing the result to the draft.
 func (srv *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return
-	}
+	name := r.PathValue("zone")
 	_ = r.ParseForm()
-	oldName := r.PostFormValue("old_name")
-	oldType := r.PostFormValue("old_type")
-	oldData := r.PostFormValue("old_data")
-	newName := strings.TrimSpace(r.PostFormValue("name"))
-	ttl := strings.TrimSpace(r.PostFormValue("ttl"))
-	newType := strings.ToUpper(strings.TrimSpace(r.PostFormValue("type")))
-	data := strings.TrimSpace(r.PostFormValue("data"))
-
-	content, _, err := srv.currentContent(zc)
+	id, _ := strconv.ParseInt(r.PostFormValue("id"), 10, 64)
+	rec, err := zone.NormalizeRecord(name, r.PostFormValue("name"), formUint(r, "ttl", 3600), r.PostFormValue("type"), r.PostFormValue("data"))
 	if err != nil {
-		http.Error(w, "load zone: "+err.Error(), http.StatusInternalServerError)
+		recs, _ := srv.store.Records(name)
+		rows := recordRows(recs)
+		markEditing(rows, id)
+		srv.renderRecords(w, r, name, rows, err.Error())
 		return
 	}
-	z, err := zone.Parse(content, name)
-	if err != nil {
-		http.Error(w, "parse zone: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	editErr := func(msg string) {
-		rows := recordRows(z)
-		markEditing(rows, oldName, oldType, oldData)
-		srv.renderRecordsFragment(w, r, name, rows, msg)
-	}
-	if newName == "" || newType == "" || data == "" {
-		editErr("name, type, and data are required")
-		return
-	}
-	if ttl == "" {
-		ttl = "3600"
-	}
-	line := newName + " " + ttl + " IN " + newType + " " + data
-	replaced, err := z.Replace(oldName, oldType, oldData, line)
-	if err != nil {
-		editErr(err.Error())
-		return
-	}
-	if !replaced {
-		editErr("record not found (it may have changed); the table was reloaded")
-		return
-	}
-	if err := srv.store.WriteDraft(zc.File, z.Render()); err != nil {
-		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
+	if err := srv.store.UpdateRecord(name, id, rec); err != nil {
+		http.Error(w, "update record: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	srv.audit.Log(audit.Event{Action: "record_update", Actor: clientIP(r), Zone: name})
-	srv.renderRecordsFragment(w, r, name, recordRows(z), "")
+	recs, _ := srv.store.Records(name)
+	srv.renderRecords(w, r, name, recordRows(recs), "")
 }
 
-// loadEditableZone resolves and parses the current draft-or-live content of the
-// path's zone, writing an HTTP error and returning ok=false on failure.
-func (srv *Server) loadEditableZone(w http.ResponseWriter, r *http.Request) (string, *zone.Zone, bool) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return "", nil, false
-	}
-	content, _, err := srv.currentContent(zc)
-	if err != nil {
-		http.Error(w, "load zone: "+err.Error(), http.StatusInternalServerError)
-		return "", nil, false
-	}
-	z, err := zone.Parse(content, name)
-	if err != nil {
-		http.Error(w, "parse zone: "+err.Error(), http.StatusInternalServerError)
-		return "", nil, false
-	}
-	return name, z, true
-}
-
-func (srv *Server) handleRawForm(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
+func (srv *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	_ = r.ParseForm()
+	id, _ := strconv.ParseInt(r.PostFormValue("id"), 10, 64)
+	if err := srv.store.DeleteRecord(name, id); err != nil && !errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "delete record: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	content, isDraft, err := srv.currentContent(zc)
+	srv.audit.Log(audit.Event{Action: "record_delete", Actor: clientIP(r), Zone: name})
+	recs, _ := srv.store.Records(name)
+	srv.renderRecords(w, r, name, recordRows(recs), "")
+}
+
+// ── preview / diff / validate ───────────────────────────────────────────────
+
+func (srv *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	z, err := srv.store.Build(name)
 	if err != nil {
-		content = []byte("$ORIGIN " + name + ".\n")
-		isDraft = false
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "unknown zone", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "render: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
-	srv.render(w, "raw.html", srv.pageData(r, "Raw "+name, map[string]any{
-		"Zone": name, "Content": string(content), "IsDraft": isDraft,
-		"Err": r.URL.Query().Get("error"),
+	srv.render(w, "preview.html", srv.pageData(r, "Preview "+name, map[string]any{
+		"Zone": name, "Content": string(z.Render()),
 	}))
 }
 
-func (srv *Server) handleRawSave(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return
-	}
-	_ = r.ParseForm()
-	content := r.PostFormValue("content")
-	if _, err := zone.Parse([]byte(content), name); err != nil {
-		srv.render(w, "raw.html", srv.pageData(r, "Raw "+name, map[string]any{
-			"Zone": name, "Content": content, "Err": "Zone does not parse: " + err.Error(),
-		}))
-		return
-	}
-	if err := srv.store.WriteDraft(zc.File, []byte(content)); err != nil {
-		http.Error(w, "save draft: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	srv.audit.Log(audit.Event{Action: "raw_save", Actor: clientIP(r), Zone: name})
-	http.Redirect(w, r, "/zones/"+name+"?flash=Draft+saved", http.StatusSeeOther)
-}
-
-func (srv *Server) handleDiscard(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return
-	}
-	if err := srv.store.DiscardDraft(zc.File); err != nil {
-		http.Error(w, "discard: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	srv.audit.Log(audit.Event{Action: "discard", Actor: clientIP(r), Zone: name})
-	http.Redirect(w, r, "/zones/"+name+"?flash=Draft+discarded", http.StatusSeeOther)
-}
-
 func (srv *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
+	name := r.PathValue("zone")
+	z, err := srv.store.Build(name)
+	if !srv.zoneOK(w, err) {
 		return
 	}
-	if !srv.store.HasDraft(zc.File) {
-		srv.render(w, "diff.html", srv.pageData(r, "Diff "+name, map[string]any{"Zone": name, "HasDraft": false}))
+	snap, published, _ := srv.store.LastSnapshot(name)
+	if !published {
+		srv.render(w, "diff.html", srv.pageData(r, "Diff "+name, map[string]any{"Zone": name, "Published": false}))
 		return
 	}
-	draft, _ := srv.store.ReadDraft(zc.File)
-	var liveStr string
-	if live, err := srv.store.ReadLive(zc.File); err == nil {
-		liveStr = string(live)
-	}
-	added, removed := computeDiff(liveStr, string(draft))
+	added, removed := computeDiff(snap.Content, string(z.Render()))
 	srv.render(w, "diff.html", srv.pageData(r, "Diff "+name, map[string]any{
-		"Zone": name, "HasDraft": true, "Added": added, "Removed": removed,
+		"Zone": name, "Published": true, "Added": added, "Removed": removed,
 	}))
 }
 
 func (srv *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return
-	}
-	content, _, err := srv.currentContent(zc)
+	name := r.PathValue("zone")
+	z, err := srv.store.Build(name)
 	if err != nil {
 		srv.render(w, "validate_result", map[string]any{"OK": false, "Detail": err.Error()})
 		return
 	}
-	z, perr := zone.Parse(content, name)
-	if perr != nil {
-		srv.render(w, "validate_result", map[string]any{"OK": false, "Detail": perr.Error()})
-		return
-	}
 	out, cerr := (zone.Checker{}).Check(r.Context(), name, z.Render())
 	if cerr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(cerr, &exitErr) {
+		if isCheckzoneFailure(cerr) {
 			srv.render(w, "validate_result", map[string]any{"OK": false, "Detail": strings.TrimSpace(out)})
 			return
 		}
-		// Couldn't run named-checkzone locally; the parse already succeeded.
 		srv.render(w, "validate_result", map[string]any{"OK": true, "Msg": "Parsed OK (named-checkzone unavailable locally; targets re-validate on deploy)."})
 		return
 	}
 	srv.render(w, "validate_result", map[string]any{"OK": true, "Msg": "Zone is valid."})
 }
 
+// ── deploy ──────────────────────────────────────────────────────────────────
+
 func (srv *Server) handleDeploy(w http.ResponseWriter, r *http.Request) {
-	name, _, ok := srv.zoneConfig(w, r)
-	if !ok {
+	name := r.PathValue("zone")
+	z, err := srv.store.GetZone(name)
+	if !srv.zoneOK(w, err) {
 		return
 	}
-	res, err := srv.deployer.Deploy(r.Context(), name)
-	data := srv.pageData(r, "Deploy "+name, map[string]any{"Zone": name})
+	built, err := srv.store.Build(name)
 	if err != nil {
-		data["Error"] = err.Error()
+		srv.render(w, "deploy_result.html", srv.pageData(r, "Deploy "+name, map[string]any{"Zone": name, "Error": err.Error()}))
+		return
+	}
+	old, newSerial, err := built.BumpSerial(zone.SerialPolicy(srv.cfg.SerialPolicy), time.Now())
+	if err != nil {
+		srv.render(w, "deploy_result.html", srv.pageData(r, "Deploy "+name, map[string]any{"Zone": name, "Error": err.Error()}))
+		return
+	}
+	content := built.Render()
+
+	res, derr := srv.deployer.Deploy(r.Context(), deploy.Request{
+		Zone: name, Content: content, OldSerial: old, NewSerial: newSerial, Targets: z.Targets,
+	})
+	data := srv.pageData(r, "Deploy "+name, map[string]any{"Zone": name})
+	if derr != nil {
+		data["Error"] = derr.Error()
 		if res != nil {
 			data["Result"] = res
 		}
-		srv.audit.Log(audit.Event{Action: "deploy", Actor: clientIP(r), Zone: name, Status: "error", Detail: err.Error()})
-	} else {
-		data["Result"] = res
-		srv.metrics.ObserveDeploy(string(res.Status))
-		srv.audit.Log(audit.Event{
-			Action: "deploy", Actor: clientIP(r), Zone: name,
-			Status: string(res.Status), OldSerial: res.OldSerial, NewSerial: res.NewSerial,
-			Servers: serverSummaries(res.Servers),
-		})
+		srv.audit.Log(audit.Event{Action: "deploy", Actor: clientIP(r), Zone: name, Status: "error", Detail: derr.Error()})
+		srv.render(w, "deploy_result.html", data)
+		return
 	}
+	srv.metrics.ObserveDeploy(string(res.Status))
+	if res.AllMoved() {
+		if err := srv.store.Publish(name, string(content), newSerial); err != nil {
+			srv.log.Error("publish snapshot failed", "zone", name, "err", err)
+		} else {
+			res.Promoted = true
+		}
+	}
+	srv.audit.Log(audit.Event{
+		Action: "deploy", Actor: clientIP(r), Zone: name,
+		Status: string(res.Status), OldSerial: res.OldSerial, NewSerial: res.NewSerial,
+		Servers: serverSummaries(res.Servers),
+	})
+	data["Result"] = res
 	srv.render(w, "deploy_result.html", data)
 }
 
-// serverSummaries renders each per-server result as "name:state" for the audit
-// log, where state is the furthest stage reached or the failing stage.
 func serverSummaries(srs []deploy.ServerResult) []string {
 	out := make([]string, len(srs))
 	for i, sr := range srs {
@@ -412,42 +373,86 @@ func serverSummaries(srs []deploy.ServerResult) []string {
 	return out
 }
 
+// ── history / rollback ──────────────────────────────────────────────────────
+
 func (srv *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
+	name := r.PathValue("zone")
+	if ok, _ := srv.store.ZoneExists(name); !ok {
+		http.Error(w, "unknown zone", http.StatusNotFound)
 		return
 	}
 	type row struct {
-		ID, When string
-		Size     int64
+		ID     int64
+		Serial uint32
+		When   string
+		Size   int
 	}
-	var rows []row
-	backups, err := srv.store.ListBackups(zc.File)
-	if err == nil {
-		for _, b := range backups {
-			rows = append(rows, row{ID: b.ID, When: b.CreatedAt.Format("2006-01-02 15:04:05 MST"), Size: b.Size})
-		}
+	snaps, _ := srv.store.ListSnapshots(name)
+	rows := make([]row, 0, len(snaps))
+	for _, s := range snaps {
+		rows = append(rows, row{ID: s.ID, Serial: s.Serial, When: s.CreatedAt.Format("2006-01-02 15:04:05 MST"), Size: s.Size})
 	}
 	srv.render(w, "history.html", srv.pageData(r, "History "+name, map[string]any{
-		"Zone": name, "Backups": rows, "Flash": r.URL.Query().Get("flash"),
+		"Zone": name, "Snapshots": rows, "Flash": r.URL.Query().Get("flash"),
 	}))
 }
 
 func (srv *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
-	name, zc, ok := srv.zoneConfig(w, r)
-	if !ok {
-		return
-	}
+	name := r.PathValue("zone")
 	_ = r.ParseForm()
-	id := r.PostFormValue("id")
-	if err := srv.store.Restore(zc.File, id); err != nil {
+	id, _ := strconv.ParseInt(r.PostFormValue("id"), 10, 64)
+	if err := srv.store.RestoreSnapshot(name, id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "unknown backup", http.StatusNotFound)
+			http.Error(w, "unknown snapshot", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "rollback: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	srv.audit.Log(audit.Event{Action: "rollback", Actor: clientIP(r), Zone: name, Detail: id})
-	http.Redirect(w, r, "/zones/"+name+"?flash=Restored+into+draft;+review+and+deploy", http.StatusSeeOther)
+	srv.audit.Log(audit.Event{Action: "rollback", Actor: clientIP(r), Zone: name, Detail: strconv.FormatInt(id, 10)})
+	http.Redirect(w, r, "/zones/"+name+"?flash=Restored;+review+and+deploy", http.StatusSeeOther)
+}
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+
+// zoneOK writes a 404/500 and returns false if err is non-nil.
+func (srv *Server) zoneOK(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "unknown zone", http.StatusNotFound)
+		return false
+	}
+	http.Error(w, "internal error: "+err.Error(), http.StatusInternalServerError)
+	return false
+}
+
+func (srv *Server) formTargets(r *http.Request) []string {
+	var out []string
+	for _, t := range r.PostForm["targets"] {
+		if _, ok := srv.cfg.Servers[t]; ok {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// isCheckzoneFailure reports whether the error is named-checkzone rejecting the
+// zone (a non-zero exit) versus being unable to run at all.
+func isCheckzoneFailure(err error) bool {
+	var ee *exec.ExitError
+	return errors.As(err, &ee)
+}
+
+func formUint(r *http.Request, key string, def uint32) uint32 {
+	v := strings.TrimSpace(r.PostFormValue(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseUint(v, 10, 32)
+	if err != nil {
+		return def
+	}
+	return uint32(n)
 }

@@ -1,9 +1,12 @@
 {{template "head" .}}
-<h1>Zones</h1>
+<div class="pagehead">
+  <h1>Zones</h1>
+  <a class="btn primary" href="/zones/new">{{template "ic_plus" .}} <span>New zone</span></a>
+</div>
 <div class="stats">
   <div class="stat"><div class="n">{{.NumZones}}</div><div class="l">zones</div></div>
   <div class="stat"><div class="n">{{.NumServers}}</div><div class="l">target servers</div></div>
-  <div class="stat"><div class="n">{{.NumDrafts}}</div><div class="l">pending drafts</div></div>
+  <div class="stat"><div class="n">{{.NumDirty}}</div><div class="l">with unpublished changes</div></div>
 </div>
 
 {{if .Cards}}
@@ -12,20 +15,15 @@
   <a class="card" href="/zones/{{.Name}}">
     <div class="row1">
       <span class="zname">{{template "ic_globe" $}}{{.Name}}</span>
-      {{if .HasDraft}}<span class="pill draft">{{template "ic_edit" $}} draft</span>
-      {{else if .OK}}<span class="pill live">{{template "ic_check" $}} live</span>
-      {{else}}<span class="pill failed">{{.Note}}</span>{{end}}
+      {{if .Dirty}}<span class="pill draft">{{template "ic_edit" $}} unpublished</span>{{else}}<span class="pill live">{{template "ic_check" $}} published</span>{{end}}
     </div>
-    <div class="meta">
-      {{if .OK}}<span>serial <b>{{.Serial}}</b></span><span><b>{{.Records}}</b> records</span>
-      {{else}}<span class="muted">{{.Note}}</span>{{end}}
-    </div>
+    <div class="meta"><span>serial <b>{{.Serial}}</b></span><span><b>{{.Records}}</b> records</span></div>
     <div class="targets">{{range .Targets}}<span class="tag">{{.}}</span>{{end}}</div>
   </a>
   {{end}}
 </div>
 {{else}}
-<p class="muted">No zones configured. Add entries under <code>zones:</code> in <code>mrdns.yaml</code>.</p>
+<p class="muted">No zones yet. <a href="/zones/new">Create your first zone</a>.</p>
 {{end}}
 
 <h2>Target servers</h2>
@@ -36,5 +34,5 @@
   <tbody>{{range .Servers}}<tr><td>{{.Name}}</td><td>{{.Host}}</td><td>{{.User}}</td><td>{{.Port}}</td><td>{{.Zones}}</td></tr>{{end}}</tbody>
 </table>
 </div>
-{{else}}<p class="muted">No servers configured.</p>{{end}}
+{{else}}<p class="muted">No servers configured in <code>mrdns.yaml</code>.</p>{{end}}
 {{template "foot" .}}

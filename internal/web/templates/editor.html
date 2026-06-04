@@ -1,39 +1,29 @@
 {{template "head" .}}
 <p class="crumb"><a href="/">{{template "ic_back" .}} Zones</a></p>
 <h1>{{.Zone}}</h1>
+<div class="meta-line">
+  {{if .Dirty}}<span class="pill draft">{{template "ic_edit" .}} unpublished changes</span>
+  {{else if .Published}}<span class="pill live">{{template "ic_check" .}} published</span>
+  {{else}}<span class="pill">new</span>{{end}}
+  <span class="muted">serial <b>{{.Serial}}</b></span>
+  <span class="muted">NS <b>{{.Z.PrimaryNS}}</b></span>
+  <span>{{range .Targets}}<span class="tag">{{.}}</span>{{else}}<span class="muted">no targets — set in Settings</span>{{end}}</span>
+</div>
 
-{{if .LoadErr}}
-  <div class="opbox bad">{{.LoadErr}}</div>
-  <p><a class="btn" href="/zones/{{.Zone}}/raw">{{template "ic_code" .}} <span>Open raw editor</span></a></p>
-{{else if .ParseErr}}
-  <div class="opbox bad"><strong>This zone does not parse.</strong><pre>{{.ParseErr}}</pre></div>
-  <p>Fix it in the <a href="/zones/{{.Zone}}/raw">raw editor</a>.</p>
-{{else}}
-  <div class="meta-line">
-    {{if .IsDraft}}<span class="pill draft">{{template "ic_edit" .}} draft · unpublished</span>
-    {{else}}<span class="pill live">{{template "ic_check" .}} live</span>{{end}}
-    <span class="muted">serial <b>{{.Serial}}</b></span>
-    <span>{{range .Targets}}<span class="tag">{{.}}</span>{{end}}</span>
-  </div>
+<div class="actions">
+  <button type="button" class="btn" hx-post="/zones/{{.Zone}}/validate" hx-target="#opresult">{{template "ic_shield" .}} <span>Validate</span></button>
+  {{if .Published}}<a class="btn" href="/zones/{{.Zone}}/diff">{{template "ic_diff" .}} <span>Diff</span></a>{{end}}
+  <form action="/zones/{{.Zone}}/deploy" method="post" onsubmit="return confirm('Deploy {{.Zone}} to all targets?')">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="btn primary">{{template "ic_deploy" .}} <span>Deploy</span></button>
+  </form>
+  <a class="btn" href="/zones/{{.Zone}}/history">{{template "ic_clock" .}} <span>History</span></a>
+  <a class="btn ghost" href="/zones/{{.Zone}}/preview">{{template "ic_code" .}} <span>Preview</span></a>
+  <a class="btn ghost" href="/zones/{{.Zone}}/settings">{{template "ic_server" .}} <span>Settings</span></a>
+  <form action="/zones/{{.Zone}}/delete" method="post" onsubmit="return confirm('Delete zone {{.Zone}}? This cannot be undone.')">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="btn danger">{{template "ic_trash" .}} <span>Delete</span></button>
+  </form>
+</div>
 
-  <div class="actions">
-    <form action="/zones/{{.Zone}}/validate" method="post" hx-post="/zones/{{.Zone}}/validate" hx-target="#opresult">
-      <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="btn">{{template "ic_shield" .}} <span>Validate</span></button>
-    </form>
-    <a class="btn" href="/zones/{{.Zone}}/diff">{{template "ic_diff" .}} <span>Diff</span></a>
-    <form action="/zones/{{.Zone}}/deploy" method="post" onsubmit="return confirm('Deploy {{.Zone}} to all targets?')">
-      <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="btn primary">{{template "ic_deploy" .}} <span>Deploy</span></button>
-    </form>
-    <a class="btn" href="/zones/{{.Zone}}/history">{{template "ic_clock" .}} <span>History</span></a>
-    <a class="btn ghost" href="/zones/{{.Zone}}/raw">{{template "ic_code" .}} <span>Raw</span></a>
-    {{if .IsDraft}}
-    <form action="/zones/{{.Zone}}/discard" method="post" onsubmit="return confirm('Discard draft changes?')">
-      <input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="btn danger">{{template "ic_undo" .}} <span>Discard</span></button>
-    </form>
-    {{end}}
-  </div>
-
-  <div id="opresult"></div>
-  <div class="panel">{{template "records" .}}</div>
-{{end}}
+<div id="opresult"></div>
+<div class="panel">{{template "records" .}}</div>
 {{template "foot" .}}

@@ -1,8 +1,8 @@
 // Package config loads and validates the mrdns service configuration.
 //
-// Paths default to the /opt/mrdns install layout. Secrets (the access token
-// and the cookie-signing key) are never stored in the file; they are read
-// from the environment at load time.
+// Zones and records live in the SQLite database, not in this file. The config
+// declares the target nameservers and service settings. Secrets (the access
+// token and the cookie-signing key) are read from the environment at load time.
 package config
 
 import (
@@ -21,7 +21,7 @@ import (
 const (
 	DefaultConfigPath = "/opt/mrdns/etc/mrdns.yaml"
 	DefaultListen     = "127.0.0.1:8080"
-	DefaultZonesDir   = "/opt/mrdns/var"
+	DefaultDataDir    = "/opt/mrdns/var"
 	DefaultTokenEnv   = "MRDNS_TOKEN"
 	DefaultCookieEnv  = "MRDNS_COOKIE_KEY"
 	DefaultCheckzone  = "named-checkzone"
@@ -32,14 +32,13 @@ const (
 type Config struct {
 	Listen        string            `yaml:"listen"`
 	SecureCookies *bool             `yaml:"secure_cookies"`
-	ZonesDir      string            `yaml:"zones_dir"`
+	DataDir       string            `yaml:"data_dir"`
 	AuditLog      string            `yaml:"audit_log"`
 	AuthTokenEnv  string            `yaml:"auth_token_env"`
 	CookieKeyEnv  string            `yaml:"cookie_key_env"`
 	SerialPolicy  string            `yaml:"serial_policy"`
 	BackupKeep    int               `yaml:"backup_keep"`
 	Servers       map[string]Server `yaml:"servers"`
-	Zones         map[string]Zone   `yaml:"zones"`
 
 	// Resolved from the environment at load time; never serialized.
 	AuthToken          string `yaml:"-"`
@@ -57,12 +56,6 @@ type Server struct {
 	RemoteZoneDir string `yaml:"remote_zone_dir"`
 	CheckzoneCmd  string `yaml:"checkzone_cmd"`
 	ReloadCmd     string `yaml:"reload_cmd"`
-}
-
-// Zone maps a DNS zone name to its on-disk file and target servers.
-type Zone struct {
-	File    string   `yaml:"file"`
-	Targets []string `yaml:"targets"`
 }
 
 // Load reads, parses, resolves secrets for, and validates the config file.
@@ -89,8 +82,8 @@ func (c *Config) applyDefaults() {
 	if c.Listen == "" {
 		c.Listen = DefaultListen
 	}
-	if c.ZonesDir == "" {
-		c.ZonesDir = DefaultZonesDir
+	if c.DataDir == "" {
+		c.DataDir = DefaultDataDir
 	}
 	if c.AuthTokenEnv == "" {
 		c.AuthTokenEnv = DefaultTokenEnv
@@ -134,7 +127,6 @@ func (c *Config) resolveSecrets() error {
 	}
 
 	// No key configured: generate an ephemeral one so the service still runs.
-	// Sessions are invalidated on restart; main warns about this.
 	c.CookieKey = make([]byte, 32)
 	if _, err := rand.Read(c.CookieKey); err != nil {
 		return fmt.Errorf("generate ephemeral cookie key: %w", err)
@@ -150,8 +142,8 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("serial_policy %q must be one of date|unixtime|increment", c.SerialPolicy)
 	}
-	if c.ZonesDir == "" {
-		return errors.New("zones_dir must be set")
+	if c.DataDir == "" {
+		return errors.New("data_dir must be set")
 	}
 	for name, s := range c.Servers {
 		if s.Host == "" {
@@ -164,20 +156,22 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("server %q: remote_zone_dir must be set", name)
 		}
 	}
-	for name, z := range c.Zones {
-		if z.File == "" {
-			return fmt.Errorf("zone %q: file must be set", name)
-		}
-		if len(z.Targets) == 0 {
-			return fmt.Errorf("zone %q: at least one target server is required", name)
-		}
-		for _, t := range z.Targets {
-			if _, ok := c.Servers[t]; !ok {
-				return fmt.Errorf("zone %q references unknown server %q", name, t)
-			}
+	return nil
+}
+
+// ServerNames returns the configured server names, sorted.
+func (c *Config) ServerNames() []string {
+	names := make([]string, 0, len(c.Servers))
+	for n := range c.Servers {
+		names = append(names, n)
+	}
+	// simple insertion sort to avoid importing sort here
+	for i := 1; i < len(names); i++ {
+		for j := i; j > 0 && names[j] < names[j-1]; j-- {
+			names[j], names[j-1] = names[j-1], names[j]
 		}
 	}
-	return nil
+	return names
 }
 
 // SecureCookiesEnabled reports whether the session cookie should carry the
@@ -186,9 +180,5 @@ func (c *Config) SecureCookiesEnabled() bool {
 	return c.SecureCookies == nil || *c.SecureCookies
 }
 
-// LiveDir, DraftDir, BackupDir, and LockDir are the on-disk working
-// directories derived from ZonesDir.
-func (c *Config) LiveDir() string   { return filepath.Join(c.ZonesDir, "live") }
-func (c *Config) DraftDir() string  { return filepath.Join(c.ZonesDir, "drafts") }
-func (c *Config) BackupDir() string { return filepath.Join(c.ZonesDir, "backups") }
-func (c *Config) LockDir() string   { return filepath.Join(c.ZonesDir, "locks") }
+// DBPath is the SQLite database path under the data directory.
+func (c *Config) DBPath() string { return filepath.Join(c.DataDir, "mrdns.db") }

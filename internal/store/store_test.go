@@ -1,135 +1,162 @@
 package store
 
 import (
-	"errors"
-	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/mmatfi/mrdns/internal/zone"
 )
 
-func newTestStore(t *testing.T, keep int) *Store {
+func openTest(t *testing.T) *Store {
 	t.Helper()
-	d := t.TempDir()
-	s, err := New(
-		filepath.Join(d, "live"),
-		filepath.Join(d, "drafts"),
-		filepath.Join(d, "backups"),
-		filepath.Join(d, "locks"),
-		keep,
-	)
+	s, err := Open(filepath.Join(t.TempDir(), "test.db"), 3)
 	if err != nil {
-		t.Fatalf("new store: %v", err)
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { s.Close() })
 	return s
 }
 
-func TestDraftLifecycle(t *testing.T) {
-	s := newTestStore(t, 5)
-	const file = "example.com.zone"
-
-	if err := s.WriteDraft(file, []byte("v1")); err != nil {
+func seedZone(t *testing.T, s *Store) {
+	t.Helper()
+	if err := s.CreateZone(Zone{Name: "example.com", PrimaryNS: "ns1.example.com", Mbox: "admin@example.com", Targets: []string{"ns1"}}); err != nil {
 		t.Fatal(err)
-	}
-	if !s.HasDraft(file) {
-		t.Fatal("expected a draft to exist")
-	}
-	b, err := s.ReadDraft(file)
-	if err != nil || string(b) != "v1" {
-		t.Fatalf("read draft = %q (err %v), want v1", b, err)
-	}
-	if err := s.DiscardDraft(file); err != nil {
-		t.Fatal(err)
-	}
-	if s.HasDraft(file) {
-		t.Fatal("draft should be gone after discard")
-	}
-	if _, err := s.ReadDraft(file); !errors.Is(err, ErrNoDraft) {
-		t.Fatalf("read missing draft = %v, want ErrNoDraft", err)
 	}
 }
 
-func TestPromoteCreatesBackup(t *testing.T) {
-	s := newTestStore(t, 5)
-	const file = "example.com.zone"
-
-	if err := os.WriteFile(s.livePath(file), []byte("v1"), 0o640); err != nil {
-		t.Fatal(err)
+func rec(t *testing.T, name, typ, data string) zone.Record {
+	t.Helper()
+	r, err := zone.NormalizeRecord("example.com", name, 3600, typ, data)
+	if err != nil {
+		t.Fatalf("normalize %s %s %q: %v", name, typ, data, err)
 	}
-	if err := s.WriteDraft(file, []byte("v2")); err != nil {
-		t.Fatal(err)
-	}
+	return r
+}
 
-	bk, err := s.Promote(file, []byte("v2"))
+func TestZoneLifecycle(t *testing.T) {
+	s := openTest(t)
+	seedZone(t, s)
+
+	z, err := s.GetZone("example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bk.ID == "" {
-		t.Fatal("expected a backup of the prior live file")
+	if z.Refresh == 0 || z.TTL == 0 {
+		t.Error("SOA defaults were not applied")
 	}
-	if live, _ := s.ReadLive(file); string(live) != "v2" {
-		t.Fatalf("live = %q, want v2", live)
+	if len(z.Targets) != 1 || z.Targets[0] != "ns1" {
+		t.Errorf("targets = %v", z.Targets)
 	}
-	if s.HasDraft(file) {
-		t.Fatal("draft should be cleared after promote")
+	if zones, _ := s.ListZones(); len(zones) != 1 {
+		t.Fatalf("ListZones = %d, want 1", len(zones))
 	}
-	backups, _ := s.ListBackups(file)
-	if len(backups) != 1 {
-		t.Fatalf("backups = %d, want 1", len(backups))
+	if _, err := s.GetZone("nope"); err != ErrNotFound {
+		t.Errorf("GetZone(nope) = %v, want ErrNotFound", err)
 	}
-	if old, err := s.ReadBackup(file, backups[0].ID); err != nil || string(old) != "v1" {
-		t.Fatalf("backup content = %q (err %v), want v1", old, err)
+	if err := s.DeleteZone("example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := s.ZoneExists("example.com"); ok {
+		t.Error("zone should be gone after delete")
 	}
 }
 
-func TestRestoreToDraft(t *testing.T) {
-	s := newTestStore(t, 5)
-	const file = "z.zone"
+func TestRecordsAndRender(t *testing.T) {
+	s := openTest(t)
+	seedZone(t, s)
 
-	if err := os.WriteFile(s.livePath(file), []byte("v1"), 0o640); err != nil {
+	id, err := s.AddRecord("example.com", rec(t, "www", "A", "192.0.2.2"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Promote(file, []byte("v2")); err != nil {
+	if _, err := s.AddRecord("example.com", rec(t, "@", "MX", "10 mail.example.com.")); err != nil {
 		t.Fatal(err)
 	}
-	backups, _ := s.ListBackups(file)
-	if len(backups) == 0 {
-		t.Fatal("expected a backup")
+
+	if recs, _ := s.Records("example.com"); len(recs) != 2 {
+		t.Fatalf("Records = %d, want 2", len(recs))
 	}
-	if err := s.Restore(file, backups[0].ID); err != nil {
+
+	z, err := s.Build("example.com")
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	out := string(z.Render())
+	if !strings.Contains(out, "192.0.2.2") || !strings.Contains(out, "SOA") || !strings.Contains(out, "MX") {
+		t.Errorf("render missing content:\n%s", out)
+	}
+
+	if err := s.UpdateRecord("example.com", id, rec(t, "www", "A", "192.0.2.9")); err != nil {
 		t.Fatal(err)
 	}
-	if d, _ := s.ReadDraft(file); string(d) != "v1" {
-		t.Fatalf("restored draft = %q, want v1", d)
+	if err := s.DeleteRecord("example.com", id); err != nil {
+		t.Fatal(err)
+	}
+	if recs, _ := s.Records("example.com"); len(recs) != 1 {
+		t.Fatalf("after delete Records = %d, want 1", len(recs))
+	}
+	if err := s.DeleteRecord("example.com", 99999); err != ErrNotFound {
+		t.Errorf("delete missing record = %v, want ErrNotFound", err)
 	}
 }
 
-func TestPruneKeepsMostRecent(t *testing.T) {
-	s := newTestStore(t, 2)
-	const file = "z.zone"
+func TestPublishDirtyRestore(t *testing.T) {
+	s := openTest(t)
+	seedZone(t, s)
+	s.AddRecord("example.com", rec(t, "www", "A", "192.0.2.2"))
 
-	if err := os.WriteFile(s.livePath(file), []byte("v0"), 0o640); err != nil {
+	if dirty, _ := s.Dirty("example.com"); !dirty {
+		t.Error("a never-deployed zone should be dirty")
+	}
+
+	z, _ := s.Build("example.com")
+	_, newSerial, _ := z.BumpSerial(zone.SerialIncrement, time.Now())
+	content := string(z.Render())
+	if err := s.Publish("example.com", content, newSerial); err != nil {
 		t.Fatal(err)
 	}
-	for i := 1; i <= 5; i++ {
-		if _, err := s.Promote(file, []byte("v"+strconv.Itoa(i))); err != nil {
+	if dirty, _ := s.Dirty("example.com"); dirty {
+		t.Error("zone should be clean immediately after publish")
+	}
+
+	snaps, _ := s.ListSnapshots("example.com")
+	if len(snaps) != 1 {
+		t.Fatalf("ListSnapshots = %d, want 1", len(snaps))
+	}
+
+	s.AddRecord("example.com", rec(t, "ftp", "A", "192.0.2.3"))
+	if dirty, _ := s.Dirty("example.com"); !dirty {
+		t.Error("zone should be dirty after an edit")
+	}
+
+	if err := s.RestoreSnapshot("example.com", snaps[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	recs, _ := s.Records("example.com")
+	for _, r := range recs {
+		if strings.HasPrefix(r.Name, "ftp") {
+			t.Error("ftp record should be gone after restore")
+		}
+	}
+	if dirty, _ := s.Dirty("example.com"); dirty {
+		t.Error("restoring the latest snapshot should leave the zone clean")
+	}
+}
+
+func TestSnapshotPruneKeep(t *testing.T) {
+	s := openTest(t) // keep = 3
+	seedZone(t, s)
+	s.AddRecord("example.com", rec(t, "www", "A", "192.0.2.2"))
+	for i := 0; i < 5; i++ {
+		z, _ := s.Build("example.com")
+		_, ns, _ := z.BumpSerial(zone.SerialIncrement, time.Now())
+		if err := s.Publish("example.com", string(z.Render()), ns); err != nil {
 			t.Fatal(err)
 		}
 	}
-	backups, _ := s.ListBackups(file)
-	if len(backups) > 2 {
-		t.Fatalf("backups = %d, want <= 2 (keep)", len(backups))
-	}
-}
-
-func TestReadBackupRejectsTraversal(t *testing.T) {
-	s := newTestStore(t, 5)
-	const file = "z.zone"
-
-	if _, err := s.ReadBackup(file, "../../etc/passwd"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("traversal id = %v, want ErrNotFound", err)
-	}
-	if _, err := s.ReadBackup(file, "other.zone.20260101T000000.000000000Z"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("wrong-prefix id = %v, want ErrNotFound", err)
+	if snaps, _ := s.ListSnapshots("example.com"); len(snaps) != 3 {
+		t.Fatalf("snapshots retained = %d, want 3 (keep)", len(snaps))
 	}
 }

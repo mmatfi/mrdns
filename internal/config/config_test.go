@@ -17,16 +17,12 @@ func writeConfig(t *testing.T, body string) string {
 
 const validBody = `
 listen: "127.0.0.1:9999"
-zones_dir: /tmp/mrdns
+data_dir: /tmp/mrdns
 servers:
   ns1:
     host: ns1.example.net
     user: deploy
     remote_zone_dir: /etc/bind/zones
-zones:
-  example.com:
-    file: example.com.zone
-    targets: [ns1]
 `
 
 func TestLoadValidAppliesDefaults(t *testing.T) {
@@ -50,6 +46,9 @@ func TestLoadValidAppliesDefaults(t *testing.T) {
 	if !cfg.SecureCookiesEnabled() {
 		t.Error("secure cookies should default to enabled")
 	}
+	if cfg.DBPath() != "/tmp/mrdns/mrdns.db" {
+		t.Errorf("DBPath = %q", cfg.DBPath())
+	}
 }
 
 func TestLoadRequiresToken(t *testing.T) {
@@ -59,25 +58,19 @@ func TestLoadRequiresToken(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsUnknownServer(t *testing.T) {
+func TestLoadRejectsBadSerialPolicy(t *testing.T) {
 	t.Setenv("MRDNS_TOKEN", "secret")
-	body := `
-zones_dir: /tmp/mrdns
-servers:
-  ns1: { host: a, user: b, remote_zone_dir: /z }
-zones:
-  example.com: { file: e.zone, targets: [nsX] }
-`
+	body := "data_dir: /tmp/mrdns\nserial_policy: weekly\n"
 	if _, err := Load(writeConfig(t, body)); err == nil {
-		t.Fatal("expected an error for a zone referencing an unknown server")
+		t.Fatal("expected an error for an invalid serial_policy")
 	}
 }
 
-func TestLoadRejectsBadSerialPolicy(t *testing.T) {
+func TestLoadRejectsServerMissingHost(t *testing.T) {
 	t.Setenv("MRDNS_TOKEN", "secret")
-	body := "zones_dir: /tmp/mrdns\nserial_policy: weekly\n"
+	body := "data_dir: /tmp/mrdns\nservers:\n  ns1: { user: u, remote_zone_dir: /z }\n"
 	if _, err := Load(writeConfig(t, body)); err == nil {
-		t.Fatal("expected an error for an invalid serial_policy")
+		t.Fatal("expected an error for a server with no host")
 	}
 }
 
