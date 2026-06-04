@@ -162,7 +162,7 @@ input, textarea, select {
 }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--brand-1); box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
 textarea { font-family: ui-monospace, monospace; line-height: 1.5; }
-.addrow { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px; border-top: 1px dashed var(--line-2); background: var(--panel-2); align-items: center; }
+.addrow { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px; border-bottom: 1px dashed var(--line-2); background: var(--panel-2); align-items: center; }
 .addrow input, .addrow select { width: auto; flex: 1 1 130px; }
 .addrow select { flex: 0 1 120px; }
 .addrow input[name="data"] { flex: 2 1 220px; }

@@ -1,6 +1,15 @@
 {{define "records"}}
 <div id="records">
   {{if .RecErr}}<div class="opbox bad">{{.RecErr}}</div>{{end}}
+
+  <form class="addrow" hx-post="/zones/{{.Zone}}/records" hx-target="#records" hx-swap="outerHTML">
+    <input name="name" placeholder="name (www or @)" required>
+    <input name="ttl" value="3600" size="6" aria-label="TTL">
+    <select name="type" aria-label="type">{{range typeOptions ""}}<option{{if .Selected}} selected{{end}}>{{.Value}}</option>{{end}}</select>
+    <input name="data" placeholder="data (e.g. 192.0.2.10)" required>
+    <button type="submit" class="btn primary">{{template "ic_plus" .}} <span>Add</span></button>
+  </form>
+
   <table class="grid">
     <thead><tr><th>Name</th><th>TTL</th><th>Type</th><th>Data</th><th></th></tr></thead>
     <tbody>
@@ -33,14 +42,6 @@
     {{end}}
     </tbody>
   </table>
-
-  <form class="addrow" hx-post="/zones/{{.Zone}}/records" hx-target="#records" hx-swap="outerHTML">
-    <input name="name" placeholder="name (www or @)" required>
-    <input name="ttl" value="3600" size="6" aria-label="TTL">
-    <select name="type" aria-label="type">{{range typeOptions ""}}<option{{if .Selected}} selected{{end}}>{{.Value}}</option>{{end}}</select>
-    <input name="data" placeholder="data (e.g. 192.0.2.10)" required>
-    <button type="submit" class="btn primary">{{template "ic_plus" .}} <span>Add</span></button>
-  </form>
 </div>
 {{end}}
 
