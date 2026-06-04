@@ -1,18 +1,21 @@
 {{template "head" .}}
 <h1>Target servers</h1>
 {{if .Servers}}
+<div class="panel">
 <table class="grid">
   <thead><tr><th>Name</th><th>Host</th><th>User</th><th>Port</th><th>Remote dir</th><th>Zones</th></tr></thead>
   <tbody>
   {{range .Servers}}
     <tr>
-      <td>{{.Name}}</td><td>{{.Host}}</td><td>{{.User}}</td><td>{{.Port}}</td>
+      <td><span class="zname" style="font-size:.95rem">{{template "ic_server" $}} {{.Name}}</span></td>
+      <td>{{.Host}}</td><td>{{.User}}</td><td>{{.Port}}</td>
       <td><code>{{.RemoteDir}}</code></td>
-      <td>{{range .Zones}}<span class="tag">{{.}}</span> {{end}}</td>
+      <td>{{range .Zones}}<span class="tag">{{.}}</span>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
+</div>
 {{else}}
 <p class="muted">No servers configured.</p>
 {{end}}

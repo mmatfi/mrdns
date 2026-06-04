@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mmatfi/mrdns/internal/audit"
+	"github.com/mmatfi/mrdns/internal/zone"
 )
 
 func (srv *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -81,31 +82,61 @@ func (srv *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	type zoneRow struct {
-		Name    string
-		File    string
-		Targets []string
+	type zoneCard struct {
+		Name     string
+		Serial   uint32
+		Records  int
+		HasDraft bool
+		OK       bool
+		Note     string
+		Targets  []string
 	}
-	zones := make([]zoneRow, 0, len(srv.cfg.Zones))
-	for name, z := range srv.cfg.Zones {
-		zones = append(zones, zoneRow{Name: name, File: z.File, Targets: z.Targets})
+	cards := make([]zoneCard, 0, len(srv.cfg.Zones))
+	drafts := 0
+	for name, zc := range srv.cfg.Zones {
+		c := zoneCard{Name: name, Targets: zc.Targets, HasDraft: srv.store.HasDraft(zc.File)}
+		if c.HasDraft {
+			drafts++
+		}
+		content, _, err := srv.currentContent(zc)
+		if err != nil {
+			c.Note = "no zone file"
+		} else if z, perr := zone.Parse(content, name); perr != nil {
+			c.Note = "does not parse"
+		} else {
+			c.OK = true
+			c.Serial, _ = z.Serial()
+			c.Records = z.Len()
+		}
+		cards = append(cards, c)
 	}
-	sort.Slice(zones, func(i, j int) bool { return zones[i].Name < zones[j].Name })
+	sort.Slice(cards, func(i, j int) bool { return cards[i].Name < cards[j].Name })
 
-	type serverRow struct {
-		Name string
-		Host string
-		User string
+	type serverCard struct {
+		Name, Host, User string
+		Port, Zones      int
 	}
-	servers := make([]serverRow, 0, len(srv.cfg.Servers))
+	servers := make([]serverCard, 0, len(srv.cfg.Servers))
 	for name, sv := range srv.cfg.Servers {
-		servers = append(servers, serverRow{Name: name, Host: sv.Host, User: sv.User})
+		used := 0
+		for _, z := range srv.cfg.Zones {
+			for _, t := range z.Targets {
+				if t == name {
+					used++
+				}
+			}
+		}
+		port := sv.Port
+		if port == 0 {
+			port = 22
+		}
+		servers = append(servers, serverCard{Name: name, Host: sv.Host, User: sv.User, Port: port, Zones: used})
 	}
 	sort.Slice(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
 
 	srv.render(w, "dashboard.html", srv.pageData(r, "Zones", map[string]any{
-		"Zones":   zones,
-		"Servers": servers,
+		"Cards": cards, "Servers": servers,
+		"NumZones": len(cards), "NumServers": len(servers), "NumDrafts": drafts,
 	}))
 }
 

@@ -15,8 +15,10 @@ See [DESIGN.md](DESIGN.md) for the full design and roadmap.
 > inline (add/edit/delete) into a draft, review the draft-vs-live diff,
 > validate, and deploy over SSH to all targets with per-server results, plus
 > history/rollback. Hardening is in: append-only audit log, Prometheus
-> `/metrics`, and per-IP login rate limiting. See [DESIGN.md](DESIGN.md) for
-> the architecture and the (still-open) niceties.
+> `/metrics`, and per-IP login rate limiting. The UI is a polished htmx app —
+> zone cards, colored record-type chips, a deploy timeline, toasts, and a
+> light/dark theme — shipped in the single binary with no JS build step. See
+> [DESIGN.md](DESIGN.md) for the architecture and the (still-open) niceties.
 
 ## Build & run (local dev)
 

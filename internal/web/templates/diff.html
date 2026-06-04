@@ -1,5 +1,5 @@
 {{template "head" .}}
-<p class="crumb"><a href="/zones/{{.Zone}}">&larr; {{.Zone}}</a></p>
+<p class="crumb"><a href="/zones/{{.Zone}}">{{template "ic_back" .}} {{.Zone}}</a></p>
 <h1>Diff — {{.Zone}}</h1>
 <p class="muted">draft vs live</p>
 {{if not .HasDraft}}

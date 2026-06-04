@@ -4,26 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}} · mrdns</title>
+  <script>try{var t=localStorage.getItem('mrdns-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
 </head>
 <body{{if .Authed}} hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'{{end}}>
+<div class="route-progress"></div>
 <header class="topbar">
-  <a class="brand" href="/">mrdns</a>
-  <nav class="nav">{{if .Authed}}<a href="/">Zones</a><a href="/servers">Servers</a>{{end}}</nav>
-  {{if .Authed}}
-  <form method="post" action="/logout" class="logout">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit">Log out</button>
-  </form>
-  {{end}}
+  <a class="brand" href="/"><span class="logo">{{template "ic_brand" .}}</span>mr<b>dns</b></a>
+  <nav class="nav">{{if .Authed}}<a href="/">{{template "ic_globe" .}}<span>Zones</span></a><a href="/servers">{{template "ic_server" .}}<span>Servers</span></a>{{end}}</nav>
+  <span class="spacer"></span>
+  <button class="iconbtn" type="button" data-theme-toggle aria-label="Toggle theme"><span class="moon">{{template "ic_moon" .}}</span><span class="sun">{{template "ic_sun" .}}</span></button>
+  {{if .Authed}}<form method="post" action="/logout" class="logout"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="iconbtn" type="submit" aria-label="Log out">{{template "ic_logout" .}}</button></form>{{end}}
 </header>
 <main class="container">
 {{end}}
 
 {{define "foot"}}
 </main>
-<footer class="foot">mrdns — DNS zone editor &amp; deployer</footer>
+{{if .Flash}}<div class="toasts"><div class="toast ok">{{template "ic_check" .}}<span>{{.Flash}}</span></div></div>{{end}}
+<footer class="foot">mrdns · DNS zone editor &amp; deployer</footer>
 </body>
 </html>
 {{end}}

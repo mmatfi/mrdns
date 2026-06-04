@@ -1,34 +1,40 @@
 {{template "head" .}}
 <h1>Zones</h1>
-{{if .Zones}}
-<table class="grid">
-  <thead><tr><th>Zone</th><th>File</th><th>Targets</th><th></th></tr></thead>
-  <tbody>
-  {{range .Zones}}
-    <tr>
-      <td>{{.Name}}</td>
-      <td><code>{{.File}}</code></td>
-      <td>{{range .Targets}}<span class="tag">{{.}}</span> {{end}}</td>
-      <td><a href="/zones/{{.Name}}">Edit</a></td>
-    </tr>
+<div class="stats">
+  <div class="stat"><div class="n">{{.NumZones}}</div><div class="l">zones</div></div>
+  <div class="stat"><div class="n">{{.NumServers}}</div><div class="l">target servers</div></div>
+  <div class="stat"><div class="n">{{.NumDrafts}}</div><div class="l">pending drafts</div></div>
+</div>
+
+{{if .Cards}}
+<div class="cards">
+  {{range .Cards}}
+  <a class="card" href="/zones/{{.Name}}">
+    <div class="row1">
+      <span class="zname">{{template "ic_globe" $}}{{.Name}}</span>
+      {{if .HasDraft}}<span class="pill draft">{{template "ic_edit" $}} draft</span>
+      {{else if .OK}}<span class="pill live">{{template "ic_check" $}} live</span>
+      {{else}}<span class="pill failed">{{.Note}}</span>{{end}}
+    </div>
+    <div class="meta">
+      {{if .OK}}<span>serial <b>{{.Serial}}</b></span><span><b>{{.Records}}</b> records</span>
+      {{else}}<span class="muted">{{.Note}}</span>{{end}}
+    </div>
+    <div class="targets">{{range .Targets}}<span class="tag">{{.}}</span>{{end}}</div>
+  </a>
   {{end}}
-  </tbody>
-</table>
+</div>
 {{else}}
 <p class="muted">No zones configured. Add entries under <code>zones:</code> in <code>mrdns.yaml</code>.</p>
 {{end}}
 
 <h2>Target servers</h2>
 {{if .Servers}}
+<div class="panel">
 <table class="grid">
-  <thead><tr><th>Name</th><th>Host</th><th>Deploy user</th></tr></thead>
-  <tbody>
-  {{range .Servers}}
-    <tr><td>{{.Name}}</td><td>{{.Host}}</td><td>{{.User}}</td></tr>
-  {{end}}
-  </tbody>
+  <thead><tr><th>Name</th><th>Host</th><th>User</th><th>Port</th><th>Zones</th></tr></thead>
+  <tbody>{{range .Servers}}<tr><td>{{.Name}}</td><td>{{.Host}}</td><td>{{.User}}</td><td>{{.Port}}</td><td>{{.Zones}}</td></tr>{{end}}</tbody>
 </table>
-{{else}}
-<p class="muted">No servers configured.</p>
-{{end}}
+</div>
+{{else}}<p class="muted">No servers configured.</p>{{end}}
 {{template "foot" .}}

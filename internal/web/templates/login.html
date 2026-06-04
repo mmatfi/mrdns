@@ -1,13 +1,18 @@
 {{template "head" .}}
-<section class="card login">
-  <h1>Sign in</h1>
-  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
-  <form method="post" action="/login">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <label>Access token
-      <input type="password" name="token" autofocus autocomplete="current-password" required>
-    </label>
-    <button type="submit">Sign in</button>
-  </form>
-</section>
+<div class="login-wrap">
+  <div class="card login">
+    <div class="logo">{{template "ic_brand" .}}</div>
+    <h1>Sign in</h1>
+    <p class="muted" style="margin-top:-6px">mrdns — DNS zone editor</p>
+    {{if .Error}}<div class="opbox bad">{{.Error}}</div>{{end}}
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <div class="field">
+        <label>Access token</label>
+        <input type="password" name="token" autofocus autocomplete="current-password" required>
+      </div>
+      <button class="btn primary" style="width:100%;justify-content:center">Sign in</button>
+    </form>
+  </div>
+</div>
 {{template "foot" .}}

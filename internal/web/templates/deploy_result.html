@@ -1,29 +1,30 @@
 {{template "head" .}}
-<p class="crumb"><a href="/zones/{{.Zone}}">&larr; {{.Zone}}</a></p>
+<p class="crumb"><a href="/zones/{{.Zone}}">{{template "ic_back" .}} {{.Zone}}</a></p>
 <h1>Deploy — {{.Zone}}</h1>
-{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Error}}<div class="opbox bad">{{.Error}}</div>{{end}}
 {{with .Result}}
-  <p class="meta">
-    status: <span class="badge status-{{.Status}}">{{.Status}}</span>
-    · serial {{.OldSerial}} &rarr; {{.NewSerial}}
-    · {{if .Promoted}}promoted to live{{else}}not promoted{{end}}
-  </p>
-  <table class="grid">
-    <thead><tr><th>Server</th><th>Staged</th><th>Checked</th><th>Moved</th><th>Reloaded</th><th>Verified</th><th>Detail</th></tr></thead>
-    <tbody>
+  {{$st := printf "%s" .Status}}
+  <div class="meta-line">
+    <span class="pill {{$st}}">{{if eq $st "success"}}{{template "ic_check" $}}{{else if eq $st "failed"}}{{template "ic_x" $}}{{else}}{{template "ic_deploy" $}}{{end}} {{$st}}</span>
+    <span class="muted">serial <b>{{.OldSerial}}</b> → <b>{{.NewSerial}}</b></span>
+    <span class="muted">{{if .Promoted}}promoted to live{{else}}not promoted{{end}}</span>
+  </div>
+  <div class="srv-grid">
     {{range .Servers}}
-      <tr>
-        <td>{{.Name}}</td>
-        <td>{{if .Staged}}✓{{else}}—{{end}}</td>
-        <td>{{if .Checked}}✓{{else}}—{{end}}</td>
-        <td>{{if .Moved}}✓{{else}}—{{end}}</td>
-        <td>{{if .Reloaded}}✓{{else}}—{{end}}</td>
-        <td>{{if .Verified}}✓{{else}}—{{end}}</td>
-        <td>{{if .Err}}<span class="error">{{.Err}}</span> {{end}}{{if .Output}}<code>{{.Output}}</code>{{end}}</td>
-      </tr>
+    <div class="srv">
+      <h3>{{template "ic_server" $}} {{.Name}}</h3>
+      <div class="steps">
+        <div class="step {{if .Staged}}done{{else}}todo{{end}}"><span class="dot">{{if .Staged}}{{template "ic_check" $}}{{else}}{{template "ic_dash" $}}{{end}}</span> Staged</div>
+        <div class="step {{if .Checked}}done{{else}}todo{{end}}"><span class="dot">{{if .Checked}}{{template "ic_check" $}}{{else}}{{template "ic_dash" $}}{{end}}</span> Validated</div>
+        <div class="step {{if .Moved}}done{{else}}todo{{end}}"><span class="dot">{{if .Moved}}{{template "ic_check" $}}{{else}}{{template "ic_dash" $}}{{end}}</span> Committed</div>
+        <div class="step {{if .Reloaded}}done{{else}}todo{{end}}"><span class="dot">{{if .Reloaded}}{{template "ic_check" $}}{{else}}{{template "ic_dash" $}}{{end}}</span> Reloaded</div>
+        <div class="step {{if .Verified}}done{{else}}todo{{end}}"><span class="dot">{{if .Verified}}{{template "ic_check" $}}{{else}}{{template "ic_dash" $}}{{end}}</span> Verified</div>
+      </div>
+      {{if .Err}}<div class="err">{{.Err}}</div>{{end}}
+      {{if .Output}}<div class="out"><code>{{.Output}}</code></div>{{end}}
+    </div>
     {{end}}
-    </tbody>
-  </table>
+  </div>
 {{end}}
-<p><a class="btn" href="/zones/{{.Zone}}">Back to editor</a></p>
+<p style="margin-top:20px"><a class="btn" href="/zones/{{.Zone}}">{{template "ic_back" .}} <span>Back to editor</span></a></p>
 {{template "foot" .}}
