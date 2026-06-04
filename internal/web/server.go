@@ -60,7 +60,9 @@ type Server struct {
 
 // New parses the embedded templates and constructs a Server.
 func New(d Deps) (*Server, error) {
-	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
+	tmpl, err := template.New("mrdns").Funcs(template.FuncMap{
+		"typeOptions": typeOptions,
+	}).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}

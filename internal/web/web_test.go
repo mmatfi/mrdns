@@ -254,6 +254,41 @@ func TestImportInvalidUI(t *testing.T) {
 	}
 }
 
+func TestTypeOptionsPreservesUnknown(t *testing.T) {
+	var mxSelected bool
+	for _, o := range typeOptions("mx") {
+		if o.Value == "MX" && o.Selected {
+			mxSelected = true
+		}
+	}
+	if !mxSelected {
+		t.Error("a known type should be selected (case-insensitively)")
+	}
+	if opts := typeOptions("HINFO"); opts[0].Value != "HINFO" || !opts[0].Selected {
+		t.Errorf("an uncommon type should be preserved and selected, got %+v", opts[0])
+	}
+	for _, o := range typeOptions("") {
+		if o.Selected {
+			t.Error("an empty current type should select nothing (browser defaults to first)")
+		}
+	}
+}
+
+func TestTypeDropdown(t *testing.T) {
+	srv, st, _ := newTestServer(t)
+
+	body := do(srv, authed(t, srv, "GET", "/zones/example.com", nil)).Body.String()
+	if !strings.Contains(body, `<select name="type"`) || !strings.Contains(body, ">CNAME</option>") {
+		t.Errorf("type dropdown missing from the editor")
+	}
+
+	id := wwwID(t, st)
+	edit := do(srv, authed(t, srv, "GET", "/zones/example.com/records/edit?id="+strconv.FormatInt(id, 10), nil)).Body.String()
+	if !strings.Contains(edit, "<option selected>A</option>") {
+		t.Errorf("inline edit should preselect the record's type (A):\n%s", edit)
+	}
+}
+
 func TestUnknownZone404(t *testing.T) {
 	srv, _, _ := newTestServer(t)
 	if rec := do(srv, authed(t, srv, "GET", "/zones/nope.example", nil)); rec.Code != http.StatusNotFound {

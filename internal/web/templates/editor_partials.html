@@ -9,7 +9,7 @@
       <tr class="editing">
         <td><input name="name" value="{{.Name}}" aria-label="name"></td>
         <td><input name="ttl" value="{{.TTL}}" size="6" aria-label="TTL"></td>
-        <td><input name="type" value="{{.Type}}" size="7" list="rtypes" aria-label="type"></td>
+        <td><select name="type" aria-label="type">{{range typeOptions .Type}}<option{{if .Selected}} selected{{end}}>{{.Value}}</option>{{end}}</select></td>
         <td><input name="data" value="{{.Data}}" aria-label="data"></td>
         <td class="rowactions">
           <input type="hidden" name="id" value="{{.ID}}">
@@ -37,14 +37,10 @@
   <form class="addrow" hx-post="/zones/{{.Zone}}/records" hx-target="#records" hx-swap="outerHTML">
     <input name="name" placeholder="name (www or @)" required>
     <input name="ttl" value="3600" size="6" aria-label="TTL">
-    <input name="type" placeholder="type" list="rtypes" size="7" required>
+    <select name="type" aria-label="type">{{range typeOptions ""}}<option{{if .Selected}} selected{{end}}>{{.Value}}</option>{{end}}</select>
     <input name="data" placeholder="data (e.g. 192.0.2.10)" required>
     <button type="submit" class="btn primary">{{template "ic_plus" .}} <span>Add</span></button>
   </form>
-  <datalist id="rtypes">
-    <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option>
-    <option>TXT</option><option>NS</option><option>SRV</option><option>PTR</option><option>CAA</option>
-  </datalist>
 </div>
 {{end}}
 

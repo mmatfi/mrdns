@@ -152,7 +152,7 @@ table.grid tbody tr:last-child td { border-bottom: none; }
 .rowactions { white-space: nowrap; text-align: right; }
 .rowactions .link { margin-left: 4px; }
 tr.editing { background: color-mix(in oklab, var(--panel) 50%, var(--brand-1) 10%) !important; }
-tr.editing input { width: 100%; }
+tr.editing input, tr.editing select { width: 100%; }
 
 /* ── inputs / forms ────────────────────────────────────────────────────── */
 input, textarea, select {
@@ -163,7 +163,8 @@ input, textarea, select {
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--brand-1); box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
 textarea { font-family: ui-monospace, monospace; line-height: 1.5; }
 .addrow { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px; border-top: 1px dashed var(--line-2); background: var(--panel-2); align-items: center; }
-.addrow input { width: auto; flex: 1 1 130px; }
+.addrow input, .addrow select { width: auto; flex: 1 1 130px; }
+.addrow select { flex: 0 1 120px; }
 .addrow input[name="data"] { flex: 2 1 220px; }
 .field { margin-bottom: 14px; } .field label { display: block; color: var(--muted); font-size: .85rem; margin-bottom: 5px; }
 
